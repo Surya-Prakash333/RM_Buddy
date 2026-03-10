@@ -1,0 +1,5 @@
+{
+  "name": "@rm-buddy/shared",
+  "version": "1.0.0",
+  "main": "types/index.ts"
+}

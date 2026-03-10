@@ -1,0 +1,54 @@
+import { Router } from 'express';
+import { createProxyMiddleware, fixRequestBody } from 'http-proxy-middleware';
+import { rateLimiter } from '../middleware/rate-limiter';
+import { authForward } from '../middleware/auth-forward';
+import { config } from '../config/env';
+import { logger } from '../config/logger';
+
+const router = Router();
+
+/**
+ * Proxy agent endpoints to the Python FastAPI orchestrator.
+ *
+ * Routes handled here (mounted under /api/v1/agent in index.ts):
+ *   POST /api/v1/agent/chat
+ *   GET  /api/v1/agent/health
+ *
+ * A 35-second proxy timeout is configured because LangGraph agent chains
+ * can involve multiple LLM calls and tool executions. The default Node.js
+ * socket timeout of 5 s would abort these prematurely.
+ *
+ * Middleware stack: rateLimiter → authForward → proxy
+ * The health sub-path bypasses auth so ops tooling can check it without a
+ * token, but the proxy itself still forwards to the orchestrator.
+ */
+const agentProxy = createProxyMiddleware({
+  target: config.agentOrchestratorUrl,
+  changeOrigin: true,
+  proxyTimeout: 35000,
+  timeout: 35000,
+  on: {
+    proxyReq: fixRequestBody,
+    error: (err, _req, res) => {
+      logger.error('agent proxy error', { message: (err as Error).message });
+      if ('status' in res) {
+        (res as import('express').Response).status(502).json({
+          status: 'error',
+          error: {
+            code: 'PROXY_ERROR',
+            message: 'Agent orchestrator is temporarily unavailable',
+          },
+          timestamp: new Date().toISOString(),
+        });
+      }
+    },
+  },
+});
+
+// POST /api/v1/agent/chat — requires auth
+router.post('/api/v1/agent/chat', rateLimiter, authForward, agentProxy);
+
+// GET /api/v1/agent/health — no auth (ops probe)
+router.get('/api/v1/agent/health', agentProxy);
+
+export default router;

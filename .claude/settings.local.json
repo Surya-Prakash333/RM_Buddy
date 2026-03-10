@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npx jest:*)",
+      "Bash(for f in client.model.ts portfolio.model.ts transaction.model.ts meeting.model.ts lead.model.ts pipeline.model.ts alert.model.ts alert-rule.model.ts chat-history.model.ts rm-session.model.ts audit.model.ts)",
+      "Bash(do echo \"=== $f ===\")",
+      "Read(//Users/namandeepbhatia/Desktop/AI RM Assistant/rm-buddy/**)",
+      "Bash(done)",
+      "Bash(npx tsc:*)",
+      "Bash(brew install:*)"
+    ]
+  }
+}

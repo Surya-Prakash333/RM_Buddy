@@ -1,0 +1,72 @@
+model_list:
+  # Primary model - Claude Sonnet for all agent reasoning tasks
+  - model_name: claude-default
+    litellm_params:
+      model: claude-sonnet-4-6
+      api_key: os.environ/ANTHROPIC_API_KEY
+      max_tokens: 4096
+      temperature: 0.3
+
+  # Fallback - GPT-4o when Claude unavailable
+  - model_name: gpt-fallback
+    litellm_params:
+      model: gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+      max_tokens: 4096
+      temperature: 0.3
+
+  # Cost-optimized - Gemini Flash for summaries/less critical tasks
+  - model_name: gemini-cost
+    litellm_params:
+      model: gemini/gemini-1.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+      max_tokens: 2048
+      temperature: 0.3
+
+  # Embeddings for vector search
+  - model_name: embedding-model
+    litellm_params:
+      model: text-embedding-3-small
+      api_key: os.environ/OPENAI_API_KEY
+
+router_settings:
+  routing_strategy: least-busy
+  num_retries: 3
+  retry_after: 5
+  timeout: 30
+  fallbacks:
+    - {"claude-default": ["gpt-fallback"]}
+    - {"gpt-fallback": ["gemini-cost"]}
+  allowed_fails: 2
+  cooldown_time: 60
+
+litellm_settings:
+  set_verbose: false
+  json_logs: true
+  log_raw_request_response: false
+  # Budget management
+  max_budget: 100.0  # USD per day
+  budget_duration: 1d
+  # Caching (Redis)
+  cache: true
+  cache_params:
+    type: redis
+    host: os.environ/REDIS_HOST
+    port: os.environ/REDIS_PORT
+    ttl: 3600  # 1 hour cache for identical requests
+  # Success/failure tracking
+  success_callback: []
+  failure_callback: []
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/LITELLM_DATABASE_URL  # PostgreSQL for usage tracking
+  store_model_in_db: false
+  ui_username: admin
+  ui_password: os.environ/LITELLM_UI_PASSWORD
+  # Per-user/team budgets
+  allowed_routes:
+    - /v1/chat/completions
+    - /v1/embeddings
+    - /health
+    - /models
