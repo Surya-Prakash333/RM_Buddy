@@ -122,15 +122,25 @@ async def get_client_list(
             )
             return {"error": f"HTTP {resp.status_code}: {resp.text}", "clients": []}
 
-        data: dict[str, Any] = resp.json()
+        raw: dict[str, Any] = resp.json()
+        # Unwrap NestJS APIResponse envelope { status, data, timestamp }
+        # data is a list of clients directly (not a dict with 'clients' key)
+        unwrapped = raw.get("data", raw)
+        if isinstance(unwrapped, list):
+            clients = unwrapped
+        elif isinstance(unwrapped, dict):
+            clients = unwrapped.get("clients", [])
+        else:
+            clients = []
+        total = len(clients)
         logger.debug(
             "get_client_list success [tier=%s, search=%s, page=%s, total=%s]",
             tier,
             search,
             page,
-            data.get("total"),
+            total,
         )
-        return data
+        return {"clients": clients, "total": total}
 
     except httpx.ConnectError as exc:
         logger.error("get_client_list connection error [url=%s, error=%s]", url, exc)
@@ -170,7 +180,9 @@ async def get_client_profile(client_id: str) -> dict[str, Any]:
             )
             return {"error": f"HTTP {resp.status_code}: {resp.text}"}
 
-        data: dict[str, Any] = resp.json()
+        raw: dict[str, Any] = resp.json()
+        # Unwrap NestJS APIResponse envelope { status, data, timestamp }
+        data: dict[str, Any] = raw.get("data", raw) if isinstance(raw.get("data"), dict) else raw
         logger.debug("get_client_profile success [client_id=%s]", client_id)
         return data
 
@@ -276,13 +288,15 @@ async def get_alerts(status: str = "pending", limit: int = 10) -> dict[str, Any]
             )
             return {"error": f"HTTP {resp.status_code}: {resp.text}", "alerts": []}
 
-        data: dict[str, Any] = resp.json()
+        raw: dict[str, Any] = resp.json()
+        # Unwrap NestJS APIResponse envelope
+        alerts = raw.get("data", raw) if isinstance(raw.get("data"), list) else raw.get("data", [])
         logger.debug(
             "get_alerts success [status_filter=%s, count=%s]",
             status,
-            len(data.get("alerts", [])),
+            len(alerts) if isinstance(alerts, list) else 0,
         )
-        return data
+        return {"alerts": alerts, "total": len(alerts) if isinstance(alerts, list) else 0}
 
     except httpx.ConnectError as exc:
         logger.error("get_alerts connection error [url=%s, error=%s]", url, exc)
@@ -314,7 +328,9 @@ async def get_dashboard_summary() -> dict[str, Any]:
             )
             return {"error": f"HTTP {resp.status_code}: {resp.text}"}
 
-        data: dict[str, Any] = resp.json()
+        raw: dict[str, Any] = resp.json()
+        # Unwrap NestJS APIResponse envelope
+        data = raw.get("data", raw) if isinstance(raw.get("data"), dict) else raw
         logger.debug(
             "get_dashboard_summary success [total_clients=%s, active_alerts=%s]",
             data.get("total_clients"),

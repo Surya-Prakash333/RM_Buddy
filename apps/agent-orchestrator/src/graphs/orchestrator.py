@@ -35,6 +35,7 @@ from models.types import AgentRole, IntentType, WidgetType
 
 from .intent_classifier import IntentClassifier
 from .state import AgentState
+from tools.crm_tool import set_rm_context
 
 logger = logging.getLogger(__name__)
 
@@ -177,10 +178,8 @@ class OrchestratorGraph:
 
     async def execute_agent_node(self, state: AgentState) -> dict:
         """
-        Execute the routed agent against the current state.
-
-        INFRA-AGENT-01 stub: returns a placeholder response so the graph
-        can be exercised end-to-end.  Specialist agents replace this in S1.
+        Dispatch to the appropriate specialist agent based on classified intent.
+        Falls back to a direct LLM call for GENERAL_QA / UNKNOWN intents.
         """
         if state.get("guardrail_flags"):
             return {
@@ -189,43 +188,64 @@ class OrchestratorGraph:
                 "tool_results": [],
             }
 
-        # Stub response — real agents populate tool_results and widgets
+        # Set RM identity context so CRM tools can authenticate with Core API
+        rm_identity = state.get("rm_context") or {"rm_id": state["rm_id"], "role": "RM"}
+        set_rm_context(rm_identity)
+
+        intent = state.get("intent", IntentType.UNKNOWN.value)
         rm_role = state.get("rm_role", AgentRole.RM.value)
-        system_prompt = (
-            VIKRAM_SYSTEM_PROMPT
-            if rm_role == AgentRole.BM.value
-            else ARIA_SYSTEM_PROMPT
-        )
 
         try:
-            completion = await self.llm.chat.completions.create(
-                model="claude-default",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    *state.get("messages", []),
-                    {"role": "user", "content": state["message"]},
-                ],
-                max_tokens=settings.max_agent_tokens,
-                temperature=settings.agent_temperature,
-                timeout=float(settings.agent_timeout_seconds),
-            )
-            response_text = completion.choices[0].message.content
+            # Route to specialist agents
+            if intent in (IntentType.CLIENT_QUERY.value, IntentType.PORTFOLIO_ANALYSIS.value):
+                from agents.specialists.qa_agent import QAAgent
+                agent = QAAgent(rm_id=state["rm_id"])
+                return await agent.process(state)
+
+            elif intent == IntentType.VIEW_ALERTS.value:
+                from agents.specialists.alert_agent import AlertAgent
+                agent = AlertAgent(rm_id=state["rm_id"])
+                return await agent.process(state)
+
+            elif intent == IntentType.MORNING_BRIEFING.value:
+                from agents.specialists.briefing_agent import BriefingAgent
+                agent = BriefingAgent(rm_id=state["rm_id"])
+                return await agent.process(state)
+
+            elif intent == IntentType.SCHEDULE_ACTION.value:
+                from agents.specialists.actions_agent import ActionsAgent
+                agent = ActionsAgent(rm_id=state["rm_id"])
+                return await agent.process(state)
+
+            else:
+                # GENERAL_QA / UNKNOWN — direct LLM with persona prompt
+                system_prompt = (
+                    VIKRAM_SYSTEM_PROMPT if rm_role == AgentRole.BM.value else ARIA_SYSTEM_PROMPT
+                )
+                completion = await self.llm.chat.completions.create(
+                    model="claude-default",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": state["message"]},
+                    ],
+                    max_tokens=settings.max_agent_tokens,
+                    temperature=settings.agent_temperature,
+                    timeout=float(settings.agent_timeout_seconds),
+                )
+                return {
+                    "response": completion.choices[0].message.content,
+                    "widgets": [],
+                    "tool_results": [],
+                }
+
         except Exception as exc:
-            logger.error(
-                "Agent LLM call failed [rm_id=%s, error=%s]", state["rm_id"], exc
-            )
+            logger.error("Agent execution failed [rm_id=%s, intent=%s, error=%s]", state["rm_id"], intent, exc)
             return {
                 "error": str(exc),
-                "response": "I encountered an error processing your request. Please try again.",
+                "response": "I encountered an error fetching your data. Please try again.",
                 "widgets": [],
                 "tool_results": [],
             }
-
-        return {
-            "response": response_text,
-            "widgets": [],
-            "tool_results": [],
-        }
 
     async def output_guard_node(self, state: AgentState) -> dict:
         """

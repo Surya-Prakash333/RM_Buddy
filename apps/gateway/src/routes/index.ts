@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import healthRouter from './health.routes';
 import agentRouter from './agent.routes';
+import authRouter from './auth.routes';
 import dashboardRouter from './dashboard.routes';
 
 const router = Router();
@@ -48,6 +49,11 @@ router.post(
     });
   },
 );
+
+/**
+ * Auth-service proxy (/auth/*) — must be before the catch-all dashboard proxy.
+ */
+router.use('/', authRouter);
 
 /**
  * Dashboard / core-api proxy (catch-all for /api/v1/*).

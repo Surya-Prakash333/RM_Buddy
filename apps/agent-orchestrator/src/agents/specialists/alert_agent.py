@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from config.settings import settings
 from typing import Any
 
 from agents.base_agent import BaseAgent
@@ -224,8 +225,8 @@ class AlertAgent(BaseAgent):
                 from langchain_openai import ChatOpenAI
 
                 llm = ChatOpenAI(
-                    base_url=os.getenv("LITELLM_URL", "http://localhost:4000") + "/v1",
-                    api_key=os.getenv("LITELLM_MASTER_KEY", "sk-dummy"),
+                    base_url=f"{settings.litellm_url}/v1",
+                    api_key=settings.litellm_master_key,
                     model="claude-default",
                 )
             response = await llm.ainvoke(messages)

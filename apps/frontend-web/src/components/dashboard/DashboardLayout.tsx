@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useState, useCallback, useEffect } from 'react';
 import { TopBar } from './TopBar';
 import { Sidebar } from './Sidebar';
 
@@ -18,7 +18,7 @@ interface DashboardLayoutProps {
  *  │                      TopBar (full width)                 │
  *  ├──────────────┬──────────────────────┬────────────────────┤
  *  │  Sidebar     │   Main Content       │   Chat Panel       │
- *  │  (240px)     │   (flex-1)           │   (380px)          │
+ *  │  (240px)     │   (flex-1)           │   (resizable)      │
  *  │  fixed       │   scrollable         │   fixed / scroll   │
  *  └──────────────┴──────────────────────┴────────────────────┘
  *
@@ -31,13 +31,63 @@ export function DashboardLayout({
   chatPanel,
   pendingAlertsCount = 0,
 }: DashboardLayoutProps): JSX.Element {
+  const [chatWidth, setChatWidth] = useState(380);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const startDragging = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, []);
+
+  const stopDragging = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
+  const onDrag = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging) return;
+      const newWidth = document.body.clientWidth - e.clientX;
+      if (newWidth >= 300 && newWidth <= 800) {
+        setChatWidth(newWidth);
+      }
+    },
+    [isDragging]
+  );
+
+  useEffect(() => {
+    if (isDragging) {
+      window.addEventListener('mousemove', onDrag);
+      window.addEventListener('mouseup', stopDragging);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+
+      // Prevent pointer events on iframes during drag
+      const iframes = document.querySelectorAll('iframe');
+      iframes.forEach(iframe => iframe.style.pointerEvents = 'none');
+    } else {
+      window.removeEventListener('mousemove', onDrag);
+      window.removeEventListener('mouseup', stopDragging);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+
+      const iframes = document.querySelectorAll('iframe');
+      iframes.forEach(iframe => iframe.style.pointerEvents = 'auto');
+    }
+    return () => {
+      window.removeEventListener('mousemove', onDrag);
+      window.removeEventListener('mouseup', stopDragging);
+      document.body.style.cursor = '';
+      document.body.style.userSelect = '';
+    };
+  }, [isDragging, onDrag, stopDragging]);
+
   return (
     <div className="flex flex-col h-screen min-w-[1280px] bg-surface overflow-x-auto">
       {/* ── Top bar spans full width ─────────────────────────── */}
       <TopBar pendingAlertsCount={pendingAlertsCount} />
 
       {/* ── Three-column body ────────────────────────────────── */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="flex flex-1 overflow-hidden relative">
         {/* Left: Sidebar */}
         <Sidebar />
 
@@ -46,8 +96,19 @@ export function DashboardLayout({
           {children}
         </main>
 
+        {/* Resizer Handle */}
+        <div
+          className="w-1.5 hover:bg-primary/50 cursor-col-resize z-10 transition-colors bg-transparent border-l border-gray-200 shadow-sm flex items-center justify-center shrink-0 group"
+          onMouseDown={startDragging}
+        >
+          <div className="w-1 h-8 rounded-full bg-gray-300 group-hover:bg-primary/70 transition-colors" />
+        </div>
+
         {/* Right: Chat panel */}
-        <aside className="w-[380px] shrink-0 bg-gray-50 border-l border-gray-200 flex flex-col overflow-hidden">
+        <aside
+          className="shrink-0 bg-gray-50 flex flex-col overflow-hidden transition-none"
+          style={{ width: `${chatWidth}px` }}
+        >
           {chatPanel ?? <ChatPanelPlaceholder />}
         </aside>
       </div>

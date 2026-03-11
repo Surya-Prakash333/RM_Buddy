@@ -5,6 +5,8 @@ import axios, {
 } from 'axios';
 import { API_BASE_URL, API_TIMEOUT } from '@/config/api';
 import type { APIResponse } from '@/types';
+// Imported at module level — Zustand stores are singletons so no circular dep issue at runtime
+import { useAuthStore } from '@/store/auth.store';
 
 /**
  * Central Axios instance for all API calls.
@@ -28,11 +30,6 @@ const api: AxiosInstance = axios.create({
 // ── Request interceptor: attach Authorization header ────────────────────────
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig): InternalAxiosRequestConfig => {
-    // Lazy import avoids circular dependency: auth.store → api → auth.store
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { useAuthStore } = require('@/store/auth.store') as {
-      useAuthStore: { getState: () => { token: string | null } };
-    };
     const token = useAuthStore.getState().token;
 
     if (token && config.headers) {
@@ -67,11 +64,6 @@ api.interceptors.response.use(
   },
   (error: unknown) => {
     if (axios.isAxiosError(error) && error.response?.status === 401) {
-      // Lazy import to avoid circular dep
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const { useAuthStore } = require('@/store/auth.store') as {
-        useAuthStore: { getState: () => { logout: () => void } };
-      };
       useAuthStore.getState().logout();
       // Hard-redirect to login; avoids importing react-router here
       window.location.href = '/login';

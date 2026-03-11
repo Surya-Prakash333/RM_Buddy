@@ -53,6 +53,8 @@ class IntentClassifier:
         IntentType.CLIENT_QUERY: [
             "my clients", "client list", "how many clients", "which client",
             "list clients", "client count", "my portfolio clients",
+            "tell me about my client", "about my client", "client details",
+            "client info", "who is",
         ],
         IntentType.PORTFOLIO_ANALYSIS: [
             "portfolio", "aum", "holding", "performance", "return",
@@ -63,7 +65,7 @@ class IntentClassifier:
             "arrange", "remind", "follow up", "follow-up",
         ],
         IntentType.GENERAL_QA: [
-            "explain to me", "tell me about", "how does", "what is a",
+            "explain to me", "how does", "what is a",
             "what are the", "help me understand", "describe the",
             "what does", "how to",
         ],

@@ -49,10 +49,10 @@ def get_llm_client() -> AsyncOpenAI:
 # Logical model aliases as routed by LiteLLM
 # ---------------------------------------------------------------------------
 MODELS: dict[str, str] = {
-    # Primary reasoning model — Claude Sonnet via LiteLLM alias
+    # Primary reasoning model
     "reasoning": "claude-default",
     # Cost-optimised model for summarisation / bulk tasks
-    "summarization": "gemini-cost",
+    "summarization": "gpt-fallback",
     # Embedding model for semantic search / RAG retrieval
-    "embedding": "embedding-model",
+    "embedding": "text-embedding-3-small",
 }

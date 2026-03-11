@@ -27,21 +27,20 @@ const agentProxy = createProxyMiddleware({
   changeOrigin: true,
   proxyTimeout: 35000,
   timeout: 35000,
-  on: {
-    proxyReq: fixRequestBody,
-    error: (err, _req, res) => {
-      logger.error('agent proxy error', { message: (err as Error).message });
-      if ('status' in res) {
-        (res as import('express').Response).status(502).json({
-          status: 'error',
-          error: {
-            code: 'PROXY_ERROR',
-            message: 'Agent orchestrator is temporarily unavailable',
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
+  pathRewrite: { '^/api/v1/agent': '/agent' },
+  onProxyReq: fixRequestBody,
+  onError: (err: Error, _req, res) => {
+    logger.error('agent proxy error', { message: err.message });
+    if ('status' in res) {
+      (res as import('express').Response).status(502).json({
+        status: 'error',
+        error: {
+          code: 'PROXY_ERROR',
+          message: 'Agent orchestrator is temporarily unavailable',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
   },
 });
 

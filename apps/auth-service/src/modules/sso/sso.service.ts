@@ -13,6 +13,13 @@ import { SessionService } from '../session/session.service';
 //          the axios HttpService and the configured client credentials.
 // ---------------------------------------------------------------------------
 const MOCK_TOKENS: Record<string, MockTokenPayload> = {
+  // DB-aligned tokens — match rm_profiles collection in MongoDB
+  MOCK_RM001: { rm_id: 'RM001', rm_name: 'Rajesh Kumar', rm_code: 'RK001', rm_email: 'rajesh.kumar@nuvama.com', rm_branch: 'Mumbai-BKC', rm_region: 'West', role: 'RM', client_count: 42 },
+  MOCK_RM002: { rm_id: 'RM002', rm_name: 'Sunita Malhotra', rm_code: 'SM002', rm_email: 'sunita.malhotra@nuvama.com', rm_branch: 'Delhi-CP', rm_region: 'North', role: 'RM', client_count: 38 },
+  MOCK_RM003: { rm_id: 'RM003', rm_name: 'Amit Joshi', rm_code: 'AJ003', rm_email: 'amit.joshi@nuvama.com', rm_branch: 'Bangalore-MG', rm_region: 'South', role: 'RM', client_count: 29 },
+  MOCK_RM004: { rm_id: 'RM004', rm_name: 'Ananya Iyer', rm_code: 'AI004', rm_email: 'ananya.iyer@nuvama.com', rm_branch: 'Chennai-Anna', rm_region: 'South', role: 'RM', client_count: 18 },
+  MOCK_BM001: { rm_id: 'BM001', rm_name: 'Vikram Nair', rm_code: 'VN001', rm_email: 'vikram.nair@nuvama.com', rm_branch: 'Mumbai-BKC', rm_region: 'West', role: 'BM', client_count: 0 },
+  // Legacy format (MOCK_TOKEN_RM001) — kept for backward compatibility
   MOCK_TOKEN_RM001: {
     rm_id: 'RM001',
     rm_name: 'Rajesh Kumar',

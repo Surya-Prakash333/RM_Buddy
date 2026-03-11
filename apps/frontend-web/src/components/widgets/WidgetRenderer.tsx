@@ -41,8 +41,23 @@ function asMetricData(d: Record<string, unknown>): MetricCardData {
 }
 
 function asClientTableData(d: Record<string, unknown>): { clients: ClientTableRow[]; total?: number } {
-  // Support both { clients: [...] } and flat array
+  // Flat array
   if (Array.isArray(d)) return { clients: d as unknown as ClientTableRow[] };
+
+  // Agent returns { rows: [...], columns: [...], row_count: N }
+  // Normalise each row: map `name` → `client_name` if needed
+  if (Array.isArray(d['rows'])) {
+    const clients = (d['rows'] as Record<string, unknown>[]).map((r) => ({
+      client_id: (r['client_id'] ?? r['id'] ?? '') as string,
+      client_name: (r['client_name'] ?? r['name'] ?? '') as string,
+      tier: (r['tier'] ?? '') as string,
+      aum: (r['aum'] ?? '') as string,
+      last_interaction: (r['last_interaction'] ?? r['change'] ?? '') as string,
+    }));
+    return { clients, total: typeof d['row_count'] === 'number' ? d['row_count'] : clients.length };
+  }
+
+  // Already has clients key
   return d as unknown as { clients: ClientTableRow[]; total?: number };
 }
 

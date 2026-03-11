@@ -59,6 +59,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env.orchestrator"
         env_prefix = ""
+        extra = "ignore"
 
 
 # Module-level singleton — import as `from config.settings import settings`

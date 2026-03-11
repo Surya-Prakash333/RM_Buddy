@@ -69,8 +69,16 @@ async def search_clients_by_name(query: str, rm_id: str) -> dict[str, Any]:
             }
 
         raw: dict[str, Any] = resp.json()
-        # Core API returns {"clients": [...], "total": N}
-        clients: list[dict[str, Any]] = raw.get("clients", [])
+        # Core API wraps responses in {status, data, timestamp} envelope
+        # data is a list of clients directly
+        unwrapped = raw.get("data", raw)
+        if isinstance(unwrapped, list):
+            clients: list[dict[str, Any]] = unwrapped
+        elif isinstance(unwrapped, dict):
+            # fallback: maybe has a clients key
+            clients = unwrapped.get("clients", [])
+        else:
+            clients = []
         results = clients[:5]  # defensive cap even if API returns more
 
         logger.debug(

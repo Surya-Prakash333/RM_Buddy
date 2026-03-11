@@ -25,24 +25,26 @@ const router = Router();
 const coreApiProxy = createProxyMiddleware({
   target: config.coreApiUrl,
   changeOrigin: true,
-  on: {
-    proxyReq: fixRequestBody,
-    error: (err, _req, res) => {
-      logger.error('dashboard proxy error', { message: (err as Error).message });
-      if ('status' in res) {
-        (res as import('express').Response).status(502).json({
-          status: 'error',
-          error: {
-            code: 'PROXY_ERROR',
-            message: 'Core API is temporarily unavailable',
-          },
-          timestamp: new Date().toISOString(),
-        });
-      }
-    },
+  onProxyReq: fixRequestBody,
+  onError: (err: Error, _req, res) => {
+    logger.error('dashboard proxy error', { message: err.message });
+    if ('status' in res) {
+      (res as import('express').Response).status(502).json({
+        status: 'error',
+        error: {
+          code: 'PROXY_ERROR',
+          message: 'Core API is temporarily unavailable',
+        },
+        timestamp: new Date().toISOString(),
+      });
+    }
   },
 });
 
+// Public routes — no auth required (login page needs RM list before user has a token)
+router.use('/api/v1/rm/list', rateLimiter, coreApiProxy);
+
+// All other /api/v1 routes require auth
 router.use('/api/v1', rateLimiter, authForward, coreApiProxy);
 
 export default router;

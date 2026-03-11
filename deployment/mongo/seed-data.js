@@ -8,7 +8,7 @@
  * Data is scoped to the 'rmbuddy' database.
  */
 
-db = db.getSiblingDB('rmbuddy');
+db = db.getSiblingDB('RM_Buddy');
 
 var now = new Date();
 
@@ -252,19 +252,68 @@ db.alerts.deleteMany({});
 var alertTypes = ['drawdown', 'cash_surplus', 'birthday', 'anniversary', 'rebalance'];
 var alertCounter = 0;
 
+var alertMessages = {
+  drawdown: [
+    'Portfolio value declined {pct}% in the last 7 days. Review equity exposure and consider hedging.',
+    'Significant drawdown detected — AUM dropped by {pct}%. Schedule an urgent review call.',
+    'Portfolio underperforming benchmark by {pct}%. Recommend defensive rebalancing.',
+  ],
+  cash_surplus: [
+    'Idle cash of ₹{amt}L sitting in savings for over 30 days. Consider liquid fund or FD ladder.',
+    'Surplus cash detected — ₹{amt}L uninvested. Opportunity to deploy into short-duration debt.',
+    'Client has ₹{amt}L excess cash. Tax-saving ELSS or NPS top-up recommended before March 31.',
+  ],
+  birthday: [
+    'Client birthday coming up on {date}. Schedule a congratulatory call and explore review meeting.',
+    'Birthday in {days} days. Good opportunity to strengthen the relationship with a personal touch.',
+  ],
+  anniversary: [
+    'Account anniversary approaching — {years} years with Nuvama. Celebrate the milestone and propose loyalty benefits.',
+    'Relationship anniversary in {days} days. Review portfolio performance since onboarding.',
+  ],
+  rebalance: [
+    'Equity allocation drifted to {pct}% vs target 60%. Rebalancing required to maintain risk profile.',
+    'Asset allocation has drifted beyond tolerance. Equity at {pct}%, debt at {dpct}%. Rebalance recommended.',
+    'Portfolio drift detected — large-cap overweight at {pct}%. Consider profit booking.',
+  ],
+};
+
 rmProfiles.forEach(function (rm) {
   for (var a = 0; a < randomBetween(3, 8); a++) {
     alertCounter++;
     var alertId = 'AL' + String(alertCounter).padStart(5, '0');
+    var alertType = pick(alertTypes);
+    var clientId = 'CL' + String(randomBetween(1, clientCounter)).padStart(5, '0');
+
+    // Look up client name
+    var clientDoc = db.clients.findOne({ client_id: clientId }, { client_name: 1 });
+    var clientName = clientDoc ? clientDoc.client_name : 'Unknown Client';
+
+    // Generate meaningful message
+    var msgTemplate = pick(alertMessages[alertType]);
+    var message = msgTemplate
+      .replace('{pct}', String(randomBetween(5, 25)))
+      .replace('{dpct}', String(randomBetween(20, 45)))
+      .replace('{amt}', String(randomBetween(10, 300)))
+      .replace('{date}', 'March ' + randomBetween(12, 31))
+      .replace('{days}', String(randomBetween(1, 14)))
+      .replace('{years}', String(randomBetween(1, 8)));
+
+    var severity = pick(['HIGH', 'MEDIUM', 'LOW']);
+    var title = alertType.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); }) + ' Alert';
 
     db.alerts.insertOne({
       alert_id: alertId,
       rm_id: rm.rm_id,
-      alert_type: pick(alertTypes),
-      client_id: 'CL' + String(randomBetween(1, clientCounter)).padStart(5, '0'),
-      status: pick(['pending', 'acknowledged', 'dismissed']),
+      alert_type: alertType,
+      severity: severity,
+      title: title,
+      body: message,
+      client_id: clientId,
+      client_name: clientName,
+      status: pick(['pending', 'pending', 'pending', 'acknowledged', 'dismissed']),
       priority: pick(['high', 'medium', 'low']),
-      message: 'Auto-generated alert for review.',
+      message: message,
       expires_at: daysFromNow(randomBetween(1, 14)),
       created_at: daysAgo(randomBetween(0, 30)),
     });
@@ -272,6 +321,48 @@ rmProfiles.forEach(function (rm) {
 });
 
 print('[alerts] Seeded ' + alertCounter + ' alerts.');
+
+// ===========================================================================
+// 6. PIPELINE
+// ===========================================================================
+print('\n[pipeline] Seeding...');
+db.pipeline.deleteMany({});
+
+var pipelineStages = ['PROSPECT', 'INTEREST_SHOWN', 'PROPOSAL_SENT', 'NEGOTIATION', 'COMMITMENT'];
+var products = [
+  'PMS — Nuvama Equity Growth', 'AIF Cat III — Quant Fund', 'Discretionary PMS',
+  'Nuvama Debt PMS', 'Sovereign Gold Bond Tranche', 'NPS Corporate Account',
+  'Structured Products — Capital Protected', 'ULIP — Wealth Plus', 'Tax-Free Bonds',
+  'Real Estate AIF', 'PE Fund — Growth Series', 'Multi-Asset PMS',
+];
+var pipelineCounter = 0;
+
+rmProfiles.forEach(function (rm) {
+  for (var p = 0; p < randomBetween(3, 8); p++) {
+    pipelineCounter++;
+    var pipelineId = 'PL' + String(pipelineCounter).padStart(5, '0');
+    var clientId = 'CL' + String(randomBetween(1, clientCounter)).padStart(5, '0');
+    var clientDoc = db.clients.findOne({ client_id: clientId }, { client_name: 1 });
+    var clientName = clientDoc ? clientDoc.client_name : 'Unknown Client';
+    var stage = pick(pipelineStages);
+    var probMap = { PROSPECT: 20, INTEREST_SHOWN: 40, PROPOSAL_SENT: 60, NEGOTIATION: 75, COMMITMENT: 90 };
+
+    db.pipeline.insertOne({
+      pipeline_id: pipelineId,
+      rm_id: rm.rm_id,
+      client_id: clientId,
+      client_name: clientName,
+      product: pick(products),
+      stage: stage,
+      amount: randomBetween(2000000, 50000000),
+      probability_pct: probMap[stage] + randomBetween(-10, 10),
+      expected_close_date: daysFromNow(randomBetween(7, 120)),
+      created_at: daysAgo(randomBetween(1, 90)),
+    });
+  }
+});
+
+print('[pipeline] Seeded ' + pipelineCounter + ' pipeline items.');
 
 // ===========================================================================
 // Done
@@ -284,4 +375,5 @@ print('  portfolios  : ' + db.portfolios.countDocuments() + ' docs');
 print('  meetings    : ' + db.meetings.countDocuments() + ' docs');
 print('  leads       : ' + db.leads.countDocuments() + ' docs');
 print('  alerts      : ' + db.alerts.countDocuments() + ' docs');
+print('  pipeline    : ' + db.pipeline.countDocuments() + ' docs');
 print('========================================\n');

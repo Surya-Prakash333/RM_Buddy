@@ -51,17 +51,10 @@ export const useAuthStore = create<AuthStore>()(
           let rmIdentity: RMIdentity;
           let resolvedToken: string = token;
 
-          if (appEnv.mockAuthEnabled && token.startsWith('MOCK_')) {
-            // Dev path: no network call
-            const result = authService.mockLogin(token);
-            rmIdentity = result.rm_identity;
-            resolvedToken = result.token;
-          } else {
-            // Production path: validate SSO token with auth-service
-            const response = await authService.validateToken(token);
-            rmIdentity = response.data.rm_identity;
-            resolvedToken = response.data.token;
-          }
+          // Always call the real auth-service so identity comes from DB-aligned data
+          const response = await authService.validateToken(token);
+          rmIdentity = response.data.rm_identity;
+          resolvedToken = response.data.token ?? token;
 
           set({
             token: resolvedToken,

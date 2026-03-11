@@ -10,6 +10,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBody, ApiParam } from '@nestjs/swagger';
+import { IsString, IsNotEmpty } from 'class-validator';
 import { SsoService } from './sso.service';
 import { SessionService } from '../session/session.service';
 import { RMIdentity, SessionData } from './sso.types';
@@ -19,10 +20,14 @@ import { RMIdentity, SessionData } from './sso.types';
 // ---------------------------------------------------------------------------
 
 class ValidateTokenDto {
+  @IsString()
+  @IsNotEmpty()
   token!: string;
 }
 
 class CreateSessionDto {
+  @IsString()
+  @IsNotEmpty()
   token!: string;
 }
 

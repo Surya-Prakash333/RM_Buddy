@@ -8,7 +8,7 @@
  * and create any that are missing.
  */
 
-db = db.getSiblingDB('rmbuddy');
+db = db.getSiblingDB('RM_Buddy');
 
 // ---------------------------------------------------------------------------
 // Helper

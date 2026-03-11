@@ -23,10 +23,10 @@ done
 echo ""
 echo "→ agent-orchestrator"
 cd "$ROOT/apps/agent-orchestrator"
-if [ ! -d "venv" ]; then
-  echo "  Creating virtualenv..."
-  python3 -m venv venv
-  venv/bin/pip install -r requirements.txt -q
+if [ ! -d ".venv" ]; then
+  echo "  Creating virtualenv with uv..."
+  uv venv
+  uv pip install -r requirements.txt -q
 fi
 pm2 start ecosystem.config.js 2>/dev/null || pm2 restart rm-orchestrator 2>/dev/null || true
 

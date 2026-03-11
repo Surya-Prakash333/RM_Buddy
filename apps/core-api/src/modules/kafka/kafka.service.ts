@@ -97,8 +97,9 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
       await this.producer.connect();
       this.logger.log('Kafka producer connected');
     } catch (err) {
+      // Non-fatal: app continues without Kafka (alerts won't be published but API remains up)
       this.logger.error(`Kafka producer connect failed: ${(err as Error).message}`);
-      throw err;
+      this.logger.warn('Running without Kafka — alert publishing disabled');
     }
   }
 
@@ -130,10 +131,9 @@ export class KafkaService implements OnModuleInit, OnModuleDestroy {
       });
       this.logger.debug(`Published to ${topic} [key=${key}]`);
     } catch (err) {
-      this.logger.error(
-        `Failed to publish to topic "${topic}" [key=${key}]: ${(err as Error).message}`,
+      this.logger.warn(
+        `Kafka publish skipped (topic="${topic}" key=${key}): ${(err as Error).message}`,
       );
-      throw err;
     }
   }
 

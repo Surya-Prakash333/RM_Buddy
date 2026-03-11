@@ -1,3 +1,6 @@
+const dotenv = require('dotenv');
+const parsedEnv = dotenv.config({ path: '.env.litellm' }).parsed || {};
+
 module.exports = {
   apps: [{
     name: 'rm-litellm-proxy',
@@ -8,10 +11,13 @@ module.exports = {
     instances: 1,
     exec_mode: 'fork',
     env: {
+      ...parsedEnv,
+      LITELLM_MASTER_KEY: parsedEnv.LITELLM_MASTER_KEY,
+      GROQ_API_KEY: parsedEnv.GROQ_API_KEY,
+      OPENAI_API_KEY: parsedEnv.OPENAI_API_KEY || parsedEnv.GROQ_API_KEY,
       NODE_ENV: 'production',
       PORT: '4000',
     },
-    env_file: '.env.litellm',
     error_file: 'logs/error.log',
     out_file: 'logs/out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss',

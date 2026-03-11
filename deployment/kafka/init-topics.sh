@@ -14,7 +14,14 @@ set -euo pipefail
 
 KAFKA_HOST="${KAFKA_HOST:-localhost:9092}"
 KAFKA_BIN="${KAFKA_BIN:-/opt/kafka/bin}"
-KAFKA_TOPICS_CMD="${KAFKA_BIN}/kafka-topics.sh"
+KAFKA_CONTAINER="${KAFKA_CONTAINER:-kafka}"   # Docker container name
+
+# If running in Docker, use docker exec; otherwise call binary directly
+if docker inspect "${KAFKA_CONTAINER}" &>/dev/null 2>&1; then
+  KAFKA_TOPICS_CMD="docker exec ${KAFKA_CONTAINER} ${KAFKA_BIN}/kafka-topics.sh"
+else
+  KAFKA_TOPICS_CMD="${KAFKA_BIN}/kafka-topics.sh"
+fi
 
 # ---------------------------------------------------------------------------
 # Topic definitions: name|partitions|replication-factor
@@ -39,7 +46,8 @@ echo ""
 for entry in "${TOPICS[@]}"; do
   IFS='|' read -r TOPIC PARTITIONS REPLICATION <<< "${entry}"
 
-  "${KAFKA_TOPICS_CMD}" \
+  # shellcheck disable=SC2086
+  ${KAFKA_TOPICS_CMD} \
     --create \
     --bootstrap-server "${KAFKA_HOST}" \
     --topic "${TOPIC}" \

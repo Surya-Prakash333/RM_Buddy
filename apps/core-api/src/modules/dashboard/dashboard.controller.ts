@@ -52,7 +52,7 @@ function buildResponse<T>(data: T): ApiResponse<T> {
 export class DashboardController {
   private readonly logger = new Logger(DashboardController.name);
 
-  constructor(private readonly dashboardService: DashboardService) {}
+  constructor(private readonly dashboardService: DashboardService) { }
 
   // -------------------------------------------------------------------------
   // Dashboard Summary
@@ -60,9 +60,9 @@ export class DashboardController {
 
   @Get('dashboard/summary')
   @ApiOperation({ summary: 'Get KPI summary for the authenticated RM' })
-  getSummary(@RMIdentity() identity: RmIdentityPayload): ApiResponse<Record<string, unknown>> {
+  async getSummary(@RMIdentity() identity: RmIdentityPayload): Promise<ApiResponse<Record<string, unknown>>> {
     this.logger.log(`getSummary rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getSummary(identity.rm_id));
+    return buildResponse(await this.dashboardService.getSummary(identity.rm_id));
   }
 
   // -------------------------------------------------------------------------
@@ -71,35 +71,35 @@ export class DashboardController {
 
   @Get('clients')
   @ApiOperation({ summary: 'List all clients managed by the RM' })
-  getClients(
+  async getClients(
     @RMIdentity() identity: RmIdentityPayload,
     @Query() _pagination: PaginationDto,
-    @Query() _filter: FilterDto,
-  ): ApiResponse<unknown> {
+    @Query() filter: FilterDto,
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getClients rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getClients(identity.rm_id));
+    return buildResponse(await this.dashboardService.getClients(identity.rm_id, filter.search));
   }
 
   @Get('clients/:id')
   @ApiOperation({ summary: 'Get a single client by ID' })
   @ApiParam({ name: 'id', description: 'Client document ID' })
-  getClient(
+  async getClient(
     @RMIdentity() identity: RmIdentityPayload,
     @Param('id') clientId: string,
-  ): ApiResponse<unknown> {
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getClient rm_id=${identity.rm_id} client_id=${clientId}`);
-    return buildResponse(this.dashboardService.getClient(identity.rm_id, clientId));
+    return buildResponse(await this.dashboardService.getClient(identity.rm_id, clientId));
   }
 
   @Get('clients/:id/portfolio')
   @ApiOperation({ summary: 'Get portfolio holdings for a client' })
   @ApiParam({ name: 'id', description: 'Client document ID' })
-  getPortfolio(
+  async getPortfolio(
     @RMIdentity() identity: RmIdentityPayload,
     @Param('id') clientId: string,
-  ): ApiResponse<unknown> {
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getPortfolio rm_id=${identity.rm_id} client_id=${clientId}`);
-    return buildResponse(this.dashboardService.getPortfolio(identity.rm_id, clientId));
+    return buildResponse(await this.dashboardService.getPortfolio(identity.rm_id, clientId));
   }
 
   // -------------------------------------------------------------------------
@@ -108,23 +108,23 @@ export class DashboardController {
 
   @Get('alerts')
   @ApiOperation({ summary: 'List unacknowledged and recent alerts for the RM' })
-  getAlerts(
+  async getAlerts(
     @RMIdentity() identity: RmIdentityPayload,
     @Query() _filter: FilterDto,
-  ): ApiResponse<unknown> {
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getAlerts rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getAlerts(identity.rm_id));
+    return buildResponse(await this.dashboardService.getAlerts(identity.rm_id));
   }
 
   @Patch('alerts/:id/acknowledge')
   @ApiOperation({ summary: 'Acknowledge an alert by ID' })
   @ApiParam({ name: 'id', description: 'Alert document ID' })
-  acknowledgeAlert(
+  async acknowledgeAlert(
     @RMIdentity() identity: RmIdentityPayload,
     @Param('id') alertId: string,
-  ): ApiResponse<unknown> {
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`acknowledgeAlert rm_id=${identity.rm_id} alert_id=${alertId}`);
-    return buildResponse(this.dashboardService.acknowledgeAlert(identity.rm_id, alertId));
+    return buildResponse(await this.dashboardService.acknowledgeAlert(identity.rm_id, alertId));
   }
 
   // -------------------------------------------------------------------------
@@ -133,9 +133,9 @@ export class DashboardController {
 
   @Get('briefing/today')
   @ApiOperation({ summary: "Get today's AI-generated briefing for the RM" })
-  getBriefing(@RMIdentity() identity: RmIdentityPayload): ApiResponse<unknown> {
+  async getBriefing(@RMIdentity() identity: RmIdentityPayload): Promise<ApiResponse<unknown>> {
     this.logger.log(`getBriefing rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getBriefing(identity.rm_id));
+    return buildResponse(await this.dashboardService.getBriefing(identity.rm_id));
   }
 
   // -------------------------------------------------------------------------
@@ -144,9 +144,9 @@ export class DashboardController {
 
   @Get('daily-actions')
   @ApiOperation({ summary: 'Get prioritized daily actions for the RM' })
-  getDailyActions(@RMIdentity() identity: RmIdentityPayload): ApiResponse<unknown> {
+  async getDailyActions(@RMIdentity() identity: RmIdentityPayload): Promise<ApiResponse<unknown>> {
     this.logger.log(`getDailyActions rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getDailyActions(identity.rm_id));
+    return buildResponse(await this.dashboardService.getDailyActions(identity.rm_id));
   }
 
   // -------------------------------------------------------------------------
@@ -155,9 +155,9 @@ export class DashboardController {
 
   @Get('meetings')
   @ApiOperation({ summary: "Get today's meetings for the RM" })
-  getMeetings(@RMIdentity() identity: RmIdentityPayload): ApiResponse<unknown> {
+  async getMeetings(@RMIdentity() identity: RmIdentityPayload): Promise<ApiResponse<unknown>> {
     this.logger.log(`getMeetings rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getMeetings(identity.rm_id));
+    return buildResponse(await this.dashboardService.getMeetings(identity.rm_id));
   }
 
   // -------------------------------------------------------------------------
@@ -166,32 +166,32 @@ export class DashboardController {
 
   @Get('leads')
   @ApiOperation({ summary: 'List leads assigned to the RM' })
-  getLeads(
+  async getLeads(
     @RMIdentity() identity: RmIdentityPayload,
     @Query() _filter: FilterDto,
-  ): ApiResponse<unknown> {
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getLeads rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getLeads(identity.rm_id));
+    return buildResponse(await this.dashboardService.getLeads(identity.rm_id));
   }
 
   @Get('pipeline')
   @ApiOperation({ summary: 'Get sales pipeline items for the RM' })
-  getPipeline(
+  async getPipeline(
     @RMIdentity() identity: RmIdentityPayload,
     @Query() _pagination: PaginationDto,
-  ): ApiResponse<unknown> {
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getPipeline rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getPipeline(identity.rm_id));
+    return buildResponse(await this.dashboardService.getPipeline(identity.rm_id));
   }
 
   @Get('cross-sell')
   @ApiOperation({ summary: 'Get AI-generated cross-sell opportunities' })
-  getCrossSell(
+  async getCrossSell(
     @RMIdentity() identity: RmIdentityPayload,
     @Query() _filter: FilterDto,
-  ): ApiResponse<unknown> {
+  ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getCrossSell rm_id=${identity.rm_id}`);
-    return buildResponse(this.dashboardService.getCrossSell(identity.rm_id));
+    return buildResponse(await this.dashboardService.getCrossSell(identity.rm_id));
   }
 
   // -------------------------------------------------------------------------

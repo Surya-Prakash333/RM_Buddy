@@ -88,8 +88,13 @@ export const authService = {
    * Validates an SSO token with the auth-service.
    * POST /auth/validate  { sso_token }
    */
-  validateToken: (token: string): Promise<{ data: ValidateTokenResponse }> =>
-    api.post<ValidateTokenResponse>('/auth/validate', { sso_token: token }),
+  validateToken: async (token: string): Promise<{ data: ValidateTokenResponse }> => {
+    // Auth-service expects { token } and returns { identity: RMIdentity }
+    // Map to the ValidateTokenResponse shape the store expects: { rm_identity, token }
+    const res = await api.post<{ identity: RMIdentity }>('/auth/validate', { token });
+    const body = res.data as unknown as { identity: RMIdentity };
+    return { data: { rm_identity: body.identity, token } };
+  },
 
   /**
    * Registers an authenticated RM session in the gateway.

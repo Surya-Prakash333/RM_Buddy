@@ -10,6 +10,7 @@ import { SearchModule } from './modules/search/search.module';
 import { EngagementModule } from './modules/engagement/engagement.module';
 import { BriefingModule } from './modules/briefing/briefing.module';
 import { ActionsModule } from './modules/actions/actions.module';
+import { RmModule } from './modules/rm/rm.module';
 // CrmSyncModule exists but is kept commented out per INFRA-API-01 scope.
 // Uncomment once scheduler integration is verified end-to-end (INFRA-MONGO-02).
 // import { CrmSyncModule } from './modules/crm-sync/crm-sync.module';
@@ -34,7 +35,7 @@ import { ActionsModule } from './modules/actions/actions.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: ['.env.local', '.env'],
+      envFilePath: ['.env.local', '.env.core-api', '.env'],
     }),
     DatabaseModule,
     CacheModule,
@@ -46,6 +47,7 @@ import { ActionsModule } from './modules/actions/actions.module';
     EngagementModule,
     BriefingModule,
     ActionsModule,
+    RmModule,
     // CrmSyncModule, // uncomment after scheduler integration verified (INFRA-MONGO-02)
     // AlertsModule,  // TODO: implement in alerts story
   ],

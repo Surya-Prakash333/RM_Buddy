@@ -44,6 +44,6 @@ import { CacheService, REDIS_CLIENT } from './cache.service';
     },
     CacheService,
   ],
-  exports: [CacheService],
+  exports: [CacheService, REDIS_CLIENT],
 })
 export class CacheModule {}

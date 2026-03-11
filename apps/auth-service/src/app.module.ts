@@ -20,8 +20,7 @@ import { SsoModule } from './modules/sso/sso.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: process.env.ENV_FILE || '.env',
-      ignoreEnvFile: process.env.NODE_ENV === 'production',
+      envFilePath: process.env.ENV_FILE || '.env.auth',
     }),
     DatabaseModule,
     SsoModule,

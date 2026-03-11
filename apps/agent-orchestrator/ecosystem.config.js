@@ -17,9 +17,9 @@ module.exports = {
 
       // uvicorn is invoked directly; interpreter tells PM2 to use python3
       // so that the virtual environment's uvicorn is resolved correctly.
-      script: "uvicorn",
+      script: ".venv/bin/uvicorn",
       args: "src.main:app --host 0.0.0.0 --port 5000 --workers 2",
-      interpreter: "python3",
+      interpreter: "none",
 
       // Working directory is the agent-orchestrator package root so that
       // relative imports (src.main) and .env.orchestrator file resolution work.
@@ -32,9 +32,14 @@ module.exports = {
       // Load environment variables from the local env file.
       env_file: ".env.orchestrator",
 
+      env: {
+        PYTHONPATH: "src",
+      },
+
       // Production overrides (pm2 start --env production)
       env_production: {
         NODE_ENV: "production",
+        PYTHONPATH: "src",
       },
 
       // Log files — relative to cwd

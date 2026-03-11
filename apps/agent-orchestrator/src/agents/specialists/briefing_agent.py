@@ -18,6 +18,7 @@ import base64
 import json
 import logging
 import os
+from config.settings import settings
 from typing import Any
 
 import httpx
@@ -158,8 +159,8 @@ class BriefingAgent(BaseAgent):
             llm = self.llm
         else:
             llm = ChatOpenAI(
-                base_url=os.getenv("LITELLM_URL", "http://localhost:4000") + "/v1",
-                api_key=os.getenv("LITELLM_MASTER_KEY", "sk-dummy"),
+                base_url=f"{settings.litellm_url}/v1",
+                api_key=settings.litellm_master_key,
                 model="claude-default",
             )
 

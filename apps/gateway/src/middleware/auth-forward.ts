@@ -7,14 +7,9 @@ import { logger } from '../config/logger';
  * Shape of the response body returned by auth-service POST /auth/validate.
  */
 interface AuthValidateResponse {
-  status: 'ok' | 'error';
-  data?: {
-    rm_identity: Record<string, unknown>;
-  };
-  error?: {
-    code: string;
-    message: string;
-  };
+  identity?: Record<string, unknown>;
+  // legacy wrapped shape (unused but kept for compatibility)
+  data?: { rm_identity?: Record<string, unknown> };
 }
 
 /**
@@ -85,14 +80,14 @@ export const authForward: RequestHandler = async (
   try {
     const response = await axios.post<AuthValidateResponse>(
       `${config.authServiceUrl}/auth/validate`,
-      { sso_token: token },
+      { token },
       {
         timeout: 5000,
         headers: { 'Content-Type': 'application/json' },
       },
     );
 
-    const rmIdentity = response.data?.data?.rm_identity;
+    const rmIdentity = response.data?.identity ?? response.data?.data?.rm_identity;
 
     if (!rmIdentity) {
       logger.warn('authForward: auth service returned ok but rm_identity missing', {
@@ -130,7 +125,7 @@ export const authForward: RequestHandler = async (
 
       logger.warn('authForward: auth service rejected token', {
         statusCode,
-        errorCode: body?.error?.code,
+        errorCode: (body as Record<string, unknown>)?.['error'],
         url: req.originalUrl,
       });
 

@@ -145,6 +145,7 @@ def get_session_memory(request: Request) -> SessionMemory:
     summary="Process an RM or BM message through the agent orchestrator.",
 )
 async def chat(
+    raw_request: Request,
     request: AgentRequest,
     orchestrator: OrchestratorGraph = Depends(get_orchestrator),
     memory: SessionMemory = Depends(get_session_memory),
@@ -153,11 +154,39 @@ async def chat(
     Main chat endpoint.
 
     Flow:
-      1. Append the user message to persistent history.
-      2. Run the LangGraph orchestrator.
-      3. Append the assistant response to persistent history.
-      4. Return the AgentResponse.
+      1. Parse X-RM-Identity header injected by gateway.
+      2. Append the user message to persistent history.
+      3. Run the LangGraph orchestrator.
+      4. Append the assistant response to persistent history.
+      5. Return the AgentResponse.
     """
+    import json as _json
+
+    # Read X-RM-Identity header (injected by gateway auth middleware)
+    rm_identity: dict = {}
+    identity_header = raw_request.headers.get("x-rm-identity", "")
+    if identity_header:
+        try:
+            rm_identity = _json.loads(identity_header)
+        except Exception:
+            pass
+
+    # Fallback for direct dev calls (no gateway)
+    if not rm_identity:
+        rm_identity = {"rm_id": request.rm_id, "role": "RM"}
+
+    # Inject rm_identity into context so orchestrator passes it to tools
+    merged_context = dict(request.context or {})
+    merged_context["rm_context"] = rm_identity
+    merged_context["rm_role"] = rm_identity.get("role", "RM")
+    request = AgentRequest(
+        rm_id=request.rm_id,
+        session_id=request.session_id,
+        message=request.message,
+        message_type=request.message_type,
+        context=merged_context,
+    )
+
     logger.info(
         "Chat request received [rm_id=%s, session_id=%s, message_preview=%.60s]",
         request.rm_id,

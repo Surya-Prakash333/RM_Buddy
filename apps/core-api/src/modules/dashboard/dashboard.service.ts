@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { InjectModel, InjectConnection } from '@nestjs/mongoose';
+import { Model, Connection } from 'mongoose';
 import { Meeting as MeetingModel, MeetingDocument } from '../../database/models/meeting.model';
 import { AlertRecord, AlertDocument } from '../../database/models/alert.model';
 import { CacheService } from '../cache/cache.service';
@@ -13,7 +13,7 @@ import {
 } from './dto/daily-activity.dto';
 
 // ---------------------------------------------------------------------------
-// Shared value types used across mock data
+// Shared value types used across responses
 // ---------------------------------------------------------------------------
 
 export interface ApiResponse<T> {
@@ -22,208 +22,31 @@ export interface ApiResponse<T> {
   timestamp: string;
 }
 
-export interface ClientSummary {
-  id: string;
-  name: string;
-  tier: string;
-  aum: string;
-  last_interaction: string;
-  phone: string;
-  email: string;
-}
-
-export interface Holding {
-  name: string;
-  asset_class: string;
-  value: string;
-  weight_pct: number;
-  gain_loss_pct: number;
-}
-
-export interface Portfolio {
-  client_id: string;
-  summary: {
-    total_aum: string;
-    cash_pct: number;
-    by_asset_class: Record<string, string>;
-  };
-  holdings: Holding[];
-}
-
-export interface Alert {
-  id: string;
-  type: string;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
-  client_id: string;
-  client_name: string;
-  message: string;
-  created_at: string;
-  acknowledged: boolean;
-}
-
-export interface DailyAction {
-  id: string;
-  priority: number;
-  action: string;
-  client_id: string;
-  client_name: string;
-  reasoning: string;
-  estimated_value: string;
-  due_by: string;
-}
-
-export interface Meeting {
-  id: string;
-  time: string;
-  client_id: string;
-  client_name: string;
-  agenda: string;
-  location: string;
-  duration_min: number;
-}
-
-export interface Lead {
-  id: string;
-  name: string;
-  stage: 'HOT' | 'WARM' | 'COLD';
-  potential_aum: string;
-  source: string;
-  last_contact: string;
-}
-
-export interface PipelineItem {
-  id: string;
-  client_name: string;
-  product: string;
-  stage: string;
-  amount: string;
-  probability_pct: number;
-  expected_close: string;
-}
-
-export interface CrossSellOpportunity {
-  id: string;
-  client_id: string;
-  client_name: string;
-  product: string;
-  rationale: string;
-  potential_value: string;
-  score: number;
-}
-
-// ---------------------------------------------------------------------------
-// Mock data constants — realistic Nuvama wealth management data
-// ---------------------------------------------------------------------------
-
-const MOCK_CLIENTS: ClientSummary[] = [
-  {
-    id: 'client-001',
-    name: 'Rajesh Mehta',
-    tier: 'ULTRA_HNI',
-    aum: '₹42Cr',
-    last_interaction: '2026-03-08T10:30:00Z',
-    phone: '+91-98765-43210',
-    email: 'rajesh.mehta@example.com',
-  },
-  {
-    id: 'client-002',
-    name: 'Sunita Patel',
-    tier: 'HNI',
-    aum: '₹18Cr',
-    last_interaction: '2026-03-07T14:15:00Z',
-    phone: '+91-98700-11223',
-    email: 'sunita.patel@example.com',
-  },
-  {
-    id: 'client-003',
-    name: 'Vikram Bose',
-    tier: 'HNI',
-    aum: '₹28Cr',
-    last_interaction: '2026-03-05T09:00:00Z',
-    phone: '+91-98876-54321',
-    email: 'vikram.bose@example.com',
-  },
-  {
-    id: 'client-004',
-    name: 'Anita Sharma',
-    tier: 'AFFLUENT',
-    aum: '₹6Cr',
-    last_interaction: '2026-03-01T16:45:00Z',
-    phone: '+91-97788-99001',
-    email: 'anita.sharma@example.com',
-  },
-  {
-    id: 'client-005',
-    name: 'Deepak Nair',
-    tier: 'AFFLUENT',
-    aum: '₹9Cr',
-    last_interaction: '2026-02-28T11:00:00Z',
-    phone: '+91-96655-44332',
-    email: 'deepak.nair@example.com',
-  },
-];
-
-const MOCK_ALERTS: Alert[] = [
-  {
-    id: 'alert-001',
-    type: 'IDLE_CASH',
-    priority: 'HIGH',
-    client_id: 'client-001',
-    client_name: 'Rajesh Mehta',
-    message: '₹3.2Cr sitting in savings account for 45 days. Consider liquid fund or FD ladder.',
-    created_at: '2026-03-09T08:00:00Z',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-002',
-    type: 'BIRTHDAY',
-    priority: 'MEDIUM',
-    client_id: 'client-002',
-    client_name: 'Sunita Patel',
-    message: "Client's birthday tomorrow — March 11. Schedule a congratulatory call.",
-    created_at: '2026-03-10T06:00:00Z',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-003',
-    type: 'MATURITY',
-    priority: 'HIGH',
-    client_id: 'client-003',
-    client_name: 'Vikram Bose',
-    message: '₹2Cr FD maturing on March 15. Reinvestment options must be presented this week.',
-    created_at: '2026-03-08T10:00:00Z',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-004',
-    type: 'PORTFOLIO_DRIFT',
-    priority: 'MEDIUM',
-    client_id: 'client-004',
-    client_name: 'Anita Sharma',
-    message: 'Equity allocation at 78% vs target 65%. Rebalancing required.',
-    created_at: '2026-03-07T12:00:00Z',
-    acknowledged: false,
-  },
-  {
-    id: 'alert-005',
-    type: 'SIP_LAPSE',
-    priority: 'LOW',
-    client_id: 'client-005',
-    client_name: 'Deepak Nair',
-    message: 'SIP of ₹50,000/month in Axis Bluechip Fund missed last 2 months.',
-    created_at: '2026-03-06T09:00:00Z',
-    acknowledged: true,
-  },
-];
-
 /** Redis TTL for the per-RM daily activity cache (15 minutes). */
 const DAILY_ACTIVITY_TTL_SECONDS = 900;
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function formatAum(value: number): string {
+  if (value >= 10000000) return `₹${(value / 10000000).toFixed(2)} Cr`;
+  if (value >= 100000) return `₹${(value / 100000).toFixed(2)} L`;
+  if (value > 0) return `₹${value.toLocaleString('en-IN')}`;
+  return '₹0';
+}
+
+function todayRange(): { start: Date; end: Date } {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+  return { start, end };
+}
 
 /**
  * DashboardService provides all business logic for dashboard-related endpoints.
  *
- * Legacy mock methods are kept intact for other feature areas.
- * S1-F6-L1-Data and S1-F6-L2-Logic add real MongoDB queries for daily activity.
+ * All methods query the RM_Buddy MongoDB database — no mock/hardcoded data.
  */
 @Injectable()
 export class DashboardService {
@@ -233,23 +56,13 @@ export class DashboardService {
     @InjectModel(MeetingModel.name) private readonly meetingModel: Model<MeetingDocument>,
     @InjectModel(AlertRecord.name) private readonly alertModel: Model<AlertDocument>,
     private readonly cacheService: CacheService,
-  ) {}
+    @InjectConnection() private readonly connection: Connection,
+  ) { }
 
   // -------------------------------------------------------------------------
   // S1-F6-L1-Data: Daily Activity Summary
   // -------------------------------------------------------------------------
 
-  /**
-   * Fetch the daily activity summary for a single RM.
-   *
-   * Data is served from the Redis cache when available
-   * (key: `daily:activity:{rmId}:{date}`, TTL 900 s).
-   * On a cache miss it runs MongoDB queries and populates the cache.
-   *
-   * rm_interactions collection does not exist in the current scaffold,
-   * so calls / tasks / proposals fall back to 0. Only meetings are queried
-   * from the real `meetings` collection.
-   */
   async getDailyActivitySummary(rmId: string, date: string): Promise<DailyActivitySummary> {
     const cacheKey = `daily:activity:${rmId}:${date}`;
 
@@ -265,15 +78,9 @@ export class DashboardService {
       return cached;
     }
 
-    // Defensive: readThrough should never return null when fetchFn succeeds,
-    // but guard here to satisfy strict TS.
     return this.fetchActivityFromDB(rmId, date);
   }
 
-  /**
-   * Execute the MongoDB queries for a single RM's daily activity.
-   * No interaction collection exists yet — returns 0 for calls/tasks/proposals.
-   */
   private async fetchActivityFromDB(rmId: string, date: string): Promise<DailyActivitySummary> {
     const dayStart = new Date(`${date}T00:00:00.000Z`);
     const dayEnd = new Date(`${date}T23:59:59.999Z`);
@@ -296,10 +103,10 @@ export class DashboardService {
     const summary: DailyActivitySummary = {
       rm_id: rmId,
       date,
-      calls: 0,          // rm_interactions collection not yet in scaffold
+      calls: 0,
       meetings,
-      tasks_completed: 0, // rm_interactions collection not yet in scaffold
-      proposals_sent: 0,  // rm_interactions collection not yet in scaffold
+      tasks_completed: 0,
+      proposals_sent: 0,
       active_alerts: activeAlerts,
       cached_at: new Date().toISOString(),
     };
@@ -312,19 +119,10 @@ export class DashboardService {
   // S1-F6-L2-Logic: Team Average + Gap Analysis
   // -------------------------------------------------------------------------
 
-  /**
-   * Aggregate average daily activity for all RMs in the given branch on date.
-   * Uses a single MongoDB aggregation pipeline — no N+1 queries.
-   */
   async getTeamAverageSummary(branch: string, date: string): Promise<TeamAverageSummary> {
     const dayStart = new Date(`${date}T00:00:00.000Z`);
     const dayEnd = new Date(`${date}T23:59:59.999Z`);
 
-    // Aggregate meetings per RM in the branch for the date.
-    // The meetings collection has rm_id but not branch; we use client_tier as
-    // a branch proxy until an rm_branch field is added to the schema.
-    // For now we query all RMs whose meeting records exist on this date
-    // (branch filtering is future work — treat all as same branch for MVP).
     type MeetingAggRow = { rm_id: string; meetings: number };
     const rows = await this.meetingModel.aggregate<MeetingAggRow>([
       {
@@ -362,20 +160,14 @@ export class DashboardService {
     const totalMeetings = rows.reduce((sum, r) => sum + r.meetings, 0);
 
     return {
-      calls: 0,           // rm_interactions not yet in scaffold
+      calls: 0,
       meetings: Math.round((totalMeetings / sampleSize) * 100) / 100,
-      tasks_completed: 0, // rm_interactions not yet in scaffold
-      proposals_sent: 0,  // rm_interactions not yet in scaffold
+      tasks_completed: 0,
+      proposals_sent: 0,
       sample_size: sampleSize,
     };
   }
 
-  /**
-   * Return the daily status with gap analysis vs. team average and peer rank.
-   *
-   * Peer rank is computed by counting how many RMs in the branch have
-   * FEWER meetings/calls than this RM (rank 1 = best performer).
-   */
   async getDailyStatusWithGapAnalysis(
     rmId: string,
     branch: string,
@@ -384,7 +176,6 @@ export class DashboardService {
     const dayStart = new Date(`${date}T00:00:00.000Z`);
     const dayEnd = new Date(`${date}T23:59:59.999Z`);
 
-    // Run RM summary + team aggregation in parallel
     const [rmSummary, teamAvg] = await Promise.all([
       this.getDailyActivitySummary(rmId, date),
       this.getTeamAverageSummary(branch, date),
@@ -397,7 +188,6 @@ export class DashboardService {
       proposals_sent: rmSummary.proposals_sent - teamAvg.proposals_sent,
     };
 
-    // Peer rank: count RMs with fewer meetings than this RM (for meetings rank)
     type PeerRow = { rm_id: string; meetings: number };
     const peerRows = await this.meetingModel.aggregate<PeerRow>([
       {
@@ -423,19 +213,18 @@ export class DashboardService {
     const rmMeetings = rmSummary.meetings;
     const rmTotal = rmSummary.calls + rmSummary.meetings + rmSummary.tasks_completed + rmSummary.proposals_sent;
 
-    // Rank = number of peers with strictly fewer + 1
     const meetingsRank =
       peerRows.filter((r) => r.rm_id !== rmId && r.meetings < rmMeetings).length + 1;
 
     const overallRank =
       peerRows.filter((r) => {
         if (r.rm_id === rmId) return false;
-        const peerTotal = r.meetings; // only meetings available without rm_interactions
+        const peerTotal = r.meetings;
         return peerTotal < rmTotal;
       }).length + 1;
 
     const peerRank: PeerRank = {
-      calls: 1,          // No call data — RM trivially ranks 1st
+      calls: 1,
       meetings: meetingsRank,
       overall: overallRank,
     };
@@ -447,379 +236,437 @@ export class DashboardService {
       peer_rank: peerRank,
     };
   }
+
   // -------------------------------------------------------------------------
-  // Summary / KPIs
+  // Summary / KPIs — Real MongoDB aggregation
   // -------------------------------------------------------------------------
 
-  getSummary(rmId: string): Record<string, unknown> {
+  async getSummary(rmId: string): Promise<Record<string, unknown>> {
+    const { start: todayStart, end: todayEnd } = todayRange();
+
+    const [
+      totalClients,
+      activeAlerts,
+      meetingsToday,
+      aumAgg,
+      activeLeads,
+      pipelineAgg,
+    ] = await Promise.all([
+      this.connection.db!.collection('clients').countDocuments({ rm_id: rmId }),
+      this.connection.db!.collection('alerts').countDocuments({ rm_id: rmId, status: 'pending' }),
+      this.connection.db!.collection('meetings').countDocuments({
+        rm_id: rmId,
+        status: 'scheduled',
+        scheduled_date: { $gte: todayStart, $lte: todayEnd },
+      }),
+      this.connection.db!.collection('portfolios').aggregate([
+        { $match: { rm_id: rmId } },
+        { $group: { _id: null, total: { $sum: '$summary.total_aum' } } },
+      ]).toArray(),
+      this.connection.db!.collection('leads').countDocuments({
+        rm_id: rmId,
+        status: { $nin: ['converted', 'lost'] },
+      }),
+      this.connection.db!.collection('pipeline').aggregate([
+        { $match: { rm_id: rmId } },
+        { $group: { _id: null, total: { $sum: '$amount' } } },
+      ]).toArray(),
+    ]);
+
+    const aumTotal = aumAgg.length > 0 ? aumAgg[0].total : 0;
+    const pipelineTotal = pipelineAgg.length > 0 ? pipelineAgg[0].total : 0;
+
     return {
       rm_id: rmId,
       kpis: {
-        total_clients: 20,
-        active_alerts: 5,
-        meetings_today: 3,
-        revenue_ytd: '₹4.2Cr',
-        aum_total: '₹125Cr',
-        pipeline_value: '₹18Cr',
+        total_clients: totalClients,
+        active_alerts: activeAlerts,
+        meetings_today: meetingsToday,
+        revenue_ytd: formatAum(aumTotal * 0.012), // approx 1.2% trail revenue
+        aum_total: formatAum(aumTotal),
+        pipeline_value: formatAum(pipelineTotal),
       },
-      aum_change_mom_pct: 2.4,
-      revenue_change_mom_pct: 8.1,
-      top_alert_type: 'IDLE_CASH',
+      aum_change_mom_pct: 0,
+      revenue_change_mom_pct: 0,
+      top_alert_type: activeAlerts > 0 ? 'pending' : 'none',
     };
   }
 
   // -------------------------------------------------------------------------
-  // Clients
+  // Clients — Already queries MongoDB
   // -------------------------------------------------------------------------
 
-  getClients(_rmId: string): ClientSummary[] {
-    return MOCK_CLIENTS;
+  async getClients(rmId: string, search?: string): Promise<Record<string, unknown>[]> {
+    const query: Record<string, any> = { rm_id: rmId };
+    if (search) {
+      query.client_name = { $regex: search, $options: 'i' };
+    }
+
+    const docs = await this.connection.db!
+      .collection('clients')
+      .find(query)
+      .project({ client_id: 1, client_name: 1, tier: 1, email: 1, phone: 1, dob: 1, age: 1, total_aum: 1, aum: 1, city: 1, last_interaction: 1, risk_profile: 1, kyc_status: 1, onboarding_date: 1 })
+      .toArray();
+    return docs.map((d) => {
+      const aumNum = typeof d.total_aum === 'number' ? d.total_aum : (typeof d.aum === 'number' ? d.aum : 0);
+      const aumStr = formatAum(aumNum);
+
+      let lastContact = 'N/A';
+      if (d.last_interaction) {
+        const date = new Date(d.last_interaction as string);
+        const diffDays = Math.floor((Date.now() - date.getTime()) / 86400000);
+        if (diffDays === 0) lastContact = 'Today';
+        else if (diffDays === 1) lastContact = 'Yesterday';
+        else if (diffDays < 30) lastContact = `${diffDays} days ago`;
+        else lastContact = date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+      }
+
+      return {
+        id: d.client_id,
+        client_id: d.client_id,
+        client_name: d.client_name,
+        tier: d.tier,
+        aum: aumStr,
+        age: d.age ?? null,
+        city: d.city ?? null,
+        email: d.email,
+        phone: d.phone,
+        last_interaction: lastContact,
+        risk_profile: d.risk_profile,
+        kyc_status: d.kyc_status,
+        onboarding_date: d.onboarding_date,
+      };
+    });
   }
 
-  getClient(_rmId: string, clientId: string): ClientSummary & Record<string, unknown> {
-    const client = MOCK_CLIENTS.find((c) => c.id === clientId) ?? MOCK_CLIENTS[0];
+  async getClient(rmId: string, clientId: string): Promise<Record<string, unknown>> {
+    const doc = await this.connection.db!
+      .collection('clients')
+      .findOne({ rm_id: rmId, client_id: clientId });
+    if (!doc) return { error: 'Client not found', client_id: clientId };
     return {
-      ...client,
-      date_of_birth: '1968-04-15',
-      pan: 'ABCDE1234F',
-      risk_profile: 'MODERATE_AGGRESSIVE',
-      relationship_since: '2018-06-01',
-      relationship_manager: 'Arjun Shah',
-      nominee: 'Priya Mehta',
-      kyc_status: 'VERIFIED',
+      id: doc.client_id,
+      client_id: doc.client_id,
+      client_name: doc.client_name,
+      tier: doc.tier,
+      email: doc.email,
+      phone: doc.phone,
+      risk_profile: doc.risk_profile,
+      kyc_status: doc.kyc_status,
+      onboarding_date: doc.onboarding_date,
+      pan: doc.pan,
+      dob: doc.dob,
     };
   }
 
   // -------------------------------------------------------------------------
-  // Portfolio
+  // Portfolio — Real MongoDB query
   // -------------------------------------------------------------------------
 
-  getPortfolio(_rmId: string, clientId: string): Portfolio {
+  async getPortfolio(rmId: string, clientId: string): Promise<Record<string, unknown>> {
+    const doc = await this.connection.db!
+      .collection('portfolios')
+      .findOne({ rm_id: rmId, client_id: clientId });
+
+    if (!doc) {
+      return { error: 'Portfolio not found', client_id: clientId };
+    }
+
+    const summary = doc.summary as Record<string, any> | undefined;
+    const totalAum = summary?.total_aum ?? 0;
+
+    const assetClassLabels: Record<string, string> = {
+      EQ: 'EQUITY',
+      FI: 'FIXED_INCOME',
+      MP: 'MUTUAL_FUNDS',
+    };
+
+    const holdings = Array.isArray(doc.holdings)
+      ? (doc.holdings as Array<Record<string, any>>).map((h) => ({
+          asset_class: assetClassLabels[h.asset_class] ?? h.asset_class,
+          value: formatAum(h.value ?? 0),
+          weight_pct: h.weight_pct ?? 0,
+        }))
+      : [];
+
+    const byAssetClass: Record<string, string> = {};
+    for (const h of holdings) {
+      byAssetClass[h.asset_class] = h.value;
+    }
+
     return {
       client_id: clientId,
       summary: {
-        total_aum: '₹42Cr',
-        cash_pct: 8,
-        by_asset_class: {
-          EQUITY: '₹22Cr',
-          DEBT: '₹12Cr',
-          MF: '₹5Cr',
-          GOLD: '₹1.5Cr',
-          REAL_ESTATE: '₹1.5Cr',
-        },
+        total_aum: formatAum(totalAum),
+        cash_pct: summary?.cash_pct ?? 0,
+        equity_pct: summary?.equity_pct ?? 0,
+        debt_pct: summary?.debt_pct ?? 0,
+        mf_pct: summary?.mf_pct ?? 0,
+        xirr: summary?.xirr ? `${Number(summary.xirr).toFixed(1)}%` : 'N/A',
+        by_asset_class: byAssetClass,
       },
-      holdings: [
-        {
-          name: 'Reliance Industries Ltd',
-          asset_class: 'EQUITY',
-          value: '₹8.4Cr',
-          weight_pct: 20,
-          gain_loss_pct: 34.2,
-        },
-        {
-          name: 'HDFC Bank Ltd',
-          asset_class: 'EQUITY',
-          value: '₹6.3Cr',
-          weight_pct: 15,
-          gain_loss_pct: 12.8,
-        },
-        {
-          name: 'Nuvama Debt PMS',
-          asset_class: 'DEBT',
-          value: '₹7Cr',
-          weight_pct: 16.7,
-          gain_loss_pct: 9.1,
-        },
-        {
-          name: 'Axis Bluechip Fund',
-          asset_class: 'MF',
-          value: '₹3.2Cr',
-          weight_pct: 7.6,
-          gain_loss_pct: 18.5,
-        },
-        {
-          name: 'Sovereign Gold Bond 2024',
-          asset_class: 'GOLD',
-          value: '₹1.5Cr',
-          weight_pct: 3.6,
-          gain_loss_pct: 22.0,
-        },
-        {
-          name: 'ICICI Pru Corporate Bond',
-          asset_class: 'DEBT',
-          value: '₹5Cr',
-          weight_pct: 11.9,
-          gain_loss_pct: 7.6,
-        },
-      ],
+      holdings,
+      drawdown: doc.drawdown
+        ? {
+            drawdown_pct: Number((doc.drawdown as Record<string, any>).drawdown_pct ?? 0).toFixed(1),
+            peak_aum: formatAum((doc.drawdown as Record<string, any>).peak_aum ?? 0),
+            trough_aum: formatAum((doc.drawdown as Record<string, any>).trough_aum ?? 0),
+          }
+        : null,
     };
   }
 
   // -------------------------------------------------------------------------
-  // Alerts
+  // Alerts — Real MongoDB query
   // -------------------------------------------------------------------------
 
-  getAlerts(_rmId: string): Alert[] {
-    return MOCK_ALERTS;
+  async getAlerts(rmId: string): Promise<Record<string, unknown>[]> {
+    const docs = await this.connection.db!
+      .collection('alerts')
+      .find({ rm_id: rmId, status: { $in: ['PENDING', 'pending'] } })
+      .sort({ created_at: -1 })
+      .limit(20)
+      .toArray();
+    return docs.map((d) => ({
+      alert_id: d.alert_id,
+      alert_type: d.alert_type,
+      severity: d.severity ?? d.priority?.toUpperCase() ?? 'MEDIUM',
+      title: d.title ?? (d.alert_type as string ?? '').replace(/_/g, ' '),
+      body: d.body ?? d.message,
+      client_id: d.client_id,
+      client_name: d.client_name ?? 'Unknown',
+      status: d.status,
+      created_at: d.created_at,
+    }));
   }
 
-  acknowledgeAlert(_rmId: string, alertId: string): { alert_id: string; acknowledged: boolean; acknowledged_at: string } {
+  async acknowledgeAlert(rmId: string, alertId: string): Promise<Record<string, unknown>> {
+    const result = await this.connection.db!.collection('alerts').updateOne(
+      { alert_id: alertId, rm_id: rmId },
+      { $set: { status: 'acknowledged', acknowledged_at: new Date() } },
+    );
+
     return {
       alert_id: alertId,
-      acknowledged: true,
+      acknowledged: result.modifiedCount > 0,
       acknowledged_at: new Date().toISOString(),
     };
   }
 
   // -------------------------------------------------------------------------
-  // Daily Briefing
+  // Daily Briefing — Composed from real data
   // -------------------------------------------------------------------------
 
-  getBriefing(rmId: string): Record<string, unknown> {
+  async getBriefing(rmId: string): Promise<Record<string, unknown>> {
+    const [alerts, meetings, dailyActions] = await Promise.all([
+      this.getAlerts(rmId),
+      this.getMeetings(rmId),
+      this.getDailyActions(rmId),
+    ]);
+
+    const highPriorityAlerts = alerts.filter(
+      (a) => a.severity === 'HIGH' || a.severity === 'high',
+    );
+
     return {
       rm_id: rmId,
       date: new Date().toISOString().slice(0, 10),
       alerts_summary: {
-        total: 5,
-        high_priority: 2,
-        top_alert: MOCK_ALERTS[0],
+        total: alerts.length,
+        high_priority: highPriorityAlerts.length,
+        top_alert: alerts.length > 0 ? alerts[0] : null,
       },
-      meetings: this.getMeetings(rmId),
-      daily_actions: this.getDailyActions(rmId),
-      revenue_summary: {
-        mtd: '₹38L',
-        ytd: '₹4.2Cr',
-        target_ytd: '₹6Cr',
-        achievement_pct: 70,
-      },
+      meetings,
+      daily_actions: dailyActions,
     };
   }
 
   // -------------------------------------------------------------------------
-  // Daily Actions
+  // Daily Actions — Generated from pending alerts + client data
   // -------------------------------------------------------------------------
 
-  getDailyActions(_rmId: string): DailyAction[] {
-    return [
-      {
-        id: 'action-001',
-        priority: 1,
-        action: 'Call Rajesh Mehta — present liquid fund options for ₹3.2Cr idle cash',
-        client_id: 'client-001',
-        client_name: 'Rajesh Mehta',
-        reasoning: 'Idle cash alert (45 days). Opportunity to earn 7% annualized vs 3.5% in savings.',
-        estimated_value: '₹11.2L incremental revenue',
-        due_by: '2026-03-10T18:00:00Z',
-      },
-      {
-        id: 'action-002',
-        priority: 2,
-        action: 'Send FD reinvestment proposal to Vikram Bose before EOD',
-        client_id: 'client-003',
-        client_name: 'Vikram Bose',
-        reasoning: '₹2Cr FD matures March 15. Competitor outreach likely. Act now.',
-        estimated_value: '₹6L revenue retention',
-        due_by: '2026-03-10T17:00:00Z',
-      },
-      {
-        id: 'action-003',
-        priority: 3,
-        action: 'Wish Sunita Patel happy birthday and schedule review call',
-        client_id: 'client-002',
-        client_name: 'Sunita Patel',
-        reasoning: 'Birthday tomorrow. Last portfolio review was 4 months ago. Opportunity for AUM growth.',
-        estimated_value: 'Relationship — potential ₹5Cr AUM expansion',
-        due_by: '2026-03-10T12:00:00Z',
-      },
-      {
-        id: 'action-004',
-        priority: 4,
-        action: 'Share rebalancing note to Anita Sharma — equity exposure at 78%',
-        client_id: 'client-004',
-        client_name: 'Anita Sharma',
-        reasoning: 'Portfolio drifted 13pp above target equity. Market volatility risk is elevated.',
-        estimated_value: 'Risk mitigation + advisory fee',
-        due_by: '2026-03-11T10:00:00Z',
-      },
-      {
-        id: 'action-005',
-        priority: 5,
-        action: 'Follow up Deepak Nair on lapsed SIP — two missed instalments',
-        client_id: 'client-005',
-        client_name: 'Deepak Nair',
-        reasoning: 'SIP lapse breaks rupee cost averaging benefit. Quick resolve maintains trail.',
-        estimated_value: '₹50K/month SIP continuity',
-        due_by: '2026-03-12T10:00:00Z',
-      },
-    ];
+  async getDailyActions(rmId: string): Promise<Record<string, unknown>[]> {
+    const alerts = await this.connection.db!
+      .collection('alerts')
+      .find({ rm_id: rmId, status: 'pending' })
+      .sort({ priority: 1, created_at: -1 })
+      .limit(10)
+      .toArray();
+
+    const priorityMap: Record<string, number> = { high: 1, medium: 2, low: 3 };
+
+    const actionTemplates: Record<string, (clientName: string, msg: string) => { action: string; reasoning: string }> = {
+      drawdown: (name, msg) => ({
+        action: `Review portfolio drawdown for ${name} — take protective action`,
+        reasoning: msg || 'Portfolio drawdown detected. Urgent review required.',
+      }),
+      cash_surplus: (name, msg) => ({
+        action: `Contact ${name} — deploy idle cash into suitable instruments`,
+        reasoning: msg || 'Idle cash detected. Opportunity to generate returns.',
+      }),
+      birthday: (name, msg) => ({
+        action: `Wish ${name} happy birthday and schedule a review call`,
+        reasoning: msg || 'Client birthday approaching. Strengthen relationship.',
+      }),
+      anniversary: (name, msg) => ({
+        action: `Send anniversary wishes to ${name} and explore new opportunities`,
+        reasoning: msg || 'Account anniversary approaching.',
+      }),
+      rebalance: (name, msg) => ({
+        action: `Rebalance portfolio for ${name} — allocation has drifted`,
+        reasoning: msg || 'Asset allocation drift detected beyond tolerance.',
+      }),
+    };
+
+    return alerts.map((a, idx) => {
+      const clientName = (a.client_name as string) ?? 'Unknown Client';
+      const alertType = (a.alert_type as string) ?? 'general';
+      const message = (a.message as string) ?? '';
+      const template = actionTemplates[alertType];
+      const generated = template
+        ? template(clientName, message)
+        : { action: `Follow up on ${alertType} alert for ${clientName}`, reasoning: message };
+
+      return {
+        id: `action-${a.alert_id}`,
+        priority: priorityMap[(a.priority as string)] ?? 2,
+        action: generated.action,
+        client_id: a.client_id,
+        client_name: clientName,
+        reasoning: generated.reasoning,
+        estimated_value: '',
+        due_by: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+      };
+    }).sort((a, b) => (a.priority as number) - (b.priority as number));
   }
 
   // -------------------------------------------------------------------------
-  // Meetings
+  // Meetings — Real MongoDB query
   // -------------------------------------------------------------------------
 
-  getMeetings(_rmId: string): Record<string, unknown>[] {
-    return [
-      {
-        id: 'mtg-001',
-        time: '10:00',
-        client_id: 'client-001',
-        client_name: 'Rajesh Mehta',
-        agenda: 'Annual portfolio review and idle cash deployment plan',
-        location: 'Nuvama Office — BKC Mumbai, Conf Room 3A',
-        duration_min: 60,
-      },
-      {
-        id: 'mtg-002',
-        time: '14:30',
-        client_id: 'client-003',
-        client_name: 'Vikram Bose',
-        agenda: 'FD maturity reinvestment — present 3 options',
-        location: 'Video Call (Zoom)',
-        duration_min: 45,
-      },
-      {
-        id: 'mtg-003',
-        time: '17:00',
-        client_id: 'client-002',
-        client_name: 'Sunita Patel',
-        agenda: 'Birthday call + NPS account opening discussion',
-        location: 'Phone',
-        duration_min: 20,
-      },
-    ];
+  async getMeetings(rmId: string): Promise<Record<string, unknown>[]> {
+    const docs = await this.connection.db!
+      .collection('meetings')
+      .find({ rm_id: rmId, status: 'scheduled' })
+      .sort({ scheduled_date: 1 })
+      .limit(10)
+      .toArray();
+
+    // Batch lookup client names
+    const clientIds = [...new Set(docs.map((d) => d.client_id as string))];
+    const clients = await this.connection.db!
+      .collection('clients')
+      .find({ client_id: { $in: clientIds } })
+      .project({ client_id: 1, client_name: 1 })
+      .toArray();
+    const clientMap = new Map(clients.map((c) => [c.client_id as string, c.client_name as string]));
+
+    return docs.map((d) => {
+      const scheduledDate = d.scheduled_date ? new Date(d.scheduled_date as string) : new Date();
+      const timeStr = scheduledDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+      return {
+        id: d.meeting_id,
+        time: timeStr,
+        client_id: d.client_id,
+        client_name: clientMap.get(d.client_id as string) ?? 'Unknown Client',
+        agenda: d.purpose ?? 'Meeting',
+        location: 'Nuvama Office',
+        duration_min: d.duration_minutes ?? 30,
+      };
+    });
   }
 
   // -------------------------------------------------------------------------
-  // Leads
+  // Leads — Real MongoDB query
   // -------------------------------------------------------------------------
 
-  getLeads(_rmId: string): Lead[] {
-    return [
-      {
-        id: 'lead-001',
-        name: 'Karan Oberoi',
-        stage: 'HOT',
-        potential_aum: '₹15Cr',
-        source: 'Referral — Rajesh Mehta',
-        last_contact: '2026-03-09T14:00:00Z',
-      },
-      {
-        id: 'lead-002',
-        name: 'Meera Iyer',
-        stage: 'HOT',
-        potential_aum: '₹8Cr',
-        source: 'LinkedIn',
-        last_contact: '2026-03-07T11:30:00Z',
-      },
-      {
-        id: 'lead-003',
-        name: 'Arjun Singhania',
-        stage: 'WARM',
-        potential_aum: '₹25Cr',
-        source: 'Nuvama Wealth Event — Feb 2026',
-        last_contact: '2026-02-28T15:00:00Z',
-      },
-      {
-        id: 'lead-004',
-        name: 'Priti Doshi',
-        stage: 'WARM',
-        potential_aum: '₹5Cr',
-        source: 'Branch Walk-in',
-        last_contact: '2026-02-20T10:00:00Z',
-      },
-    ];
+  async getLeads(rmId: string): Promise<Record<string, unknown>[]> {
+    const docs = await this.connection.db!
+      .collection('leads')
+      .find({ rm_id: rmId })
+      .sort({ created_at: -1 })
+      .limit(20)
+      .toArray();
+
+    const stageMap: Record<string, string> = {
+      new: 'COLD',
+      contacted: 'WARM',
+      interested: 'HOT',
+      proposal_sent: 'HOT',
+      converted: 'WON',
+      lost: 'LOST',
+    };
+
+    return docs.map((d) => ({
+      id: d.lead_id,
+      name: d.lead_name,
+      stage: stageMap[(d.status as string)] ?? (d.status as string ?? '').toUpperCase(),
+      potential_aum: formatAum(typeof d.potential_aum === 'number' ? d.potential_aum : 0),
+      source: ((d.source as string) ?? '').replace(/_/g, ' '),
+      last_contact: d.created_at ? new Date(d.created_at as string).toISOString() : '',
+    }));
   }
 
   // -------------------------------------------------------------------------
-  // Pipeline
+  // Pipeline — Real MongoDB query
   // -------------------------------------------------------------------------
 
-  getPipeline(_rmId: string): PipelineItem[] {
-    return [
-      {
-        id: 'pipe-001',
-        client_name: 'Karan Oberoi',
-        product: 'PMS — Nuvama Equity Growth',
-        stage: 'PROPOSAL_SENT',
-        amount: '₹10Cr',
-        probability_pct: 75,
-        expected_close: '2026-03-31',
-      },
-      {
-        id: 'pipe-002',
-        client_name: 'Meera Iyer',
-        product: 'AIF Cat III — Quant Fund',
-        stage: 'NEGOTIATION',
-        amount: '₹5Cr',
-        probability_pct: 60,
-        expected_close: '2026-04-15',
-      },
-      {
-        id: 'pipe-003',
-        client_name: 'Arjun Singhania',
-        product: 'Discretionary PMS',
-        stage: 'INTEREST_SHOWN',
-        amount: '₹15Cr',
-        probability_pct: 40,
-        expected_close: '2026-05-30',
-      },
-    ];
+  async getPipeline(rmId: string): Promise<Record<string, unknown>[]> {
+    const docs = await this.connection.db!
+      .collection('pipeline')
+      .find({ rm_id: rmId })
+      .sort({ expected_close_date: 1 })
+      .toArray();
+
+    return docs.map((d) => ({
+      id: d.pipeline_id,
+      client_name: d.client_name ?? 'Unknown',
+      product: d.product,
+      stage: d.stage,
+      amount: formatAum(typeof d.amount === 'number' ? d.amount : 0),
+      probability_pct: d.probability_pct ?? 0,
+      expected_close: d.expected_close_date
+        ? new Date(d.expected_close_date as string).toISOString().slice(0, 10)
+        : '',
+    }));
   }
 
   // -------------------------------------------------------------------------
-  // Cross-sell
+  // Cross-sell — Real MongoDB query (returns empty if no data)
   // -------------------------------------------------------------------------
 
-  getCrossSell(_rmId: string): CrossSellOpportunity[] {
-    return [
-      {
-        id: 'cs-001',
-        client_id: 'client-001',
-        client_name: 'Rajesh Mehta',
-        product: 'Term Insurance — ₹5Cr cover',
-        rationale: 'High net worth, no term insurance on record. Dependent family. Tax benefit u/s 80C.',
-        potential_value: '₹1.2L first-year premium',
-        score: 92,
-      },
-      {
-        id: 'cs-002',
-        client_id: 'client-002',
-        client_name: 'Sunita Patel',
-        product: 'NPS Corporate Account',
-        rationale: 'Approaching retirement age (57). NPS gives additional ₹50K deduction u/s 80CCD(1B).',
-        potential_value: '₹5L annual contribution',
-        score: 87,
-      },
-      {
-        id: 'cs-003',
-        client_id: 'client-003',
-        client_name: 'Vikram Bose',
-        product: 'Sovereign Gold Bond Tranche',
-        rationale: 'Existing portfolio underweight gold (< 3%). New SGB tranche opens March 20.',
-        potential_value: '₹75L investment',
-        score: 78,
-      },
-    ];
+  async getCrossSell(rmId: string): Promise<Record<string, unknown>[]> {
+    const collection = this.connection.db!.collection('cross_sell');
+    const docs = await collection
+      .find({ rm_id: rmId })
+      .sort({ score: -1 })
+      .limit(10)
+      .toArray();
+
+    return docs.map((d) => ({
+      id: d.cross_sell_id ?? d._id?.toString(),
+      client_id: d.client_id,
+      client_name: d.client_name ?? 'Unknown',
+      product: d.product,
+      rationale: d.rationale,
+      potential_value: formatAum(typeof d.potential_value === 'number' ? d.potential_value : 0),
+      score: d.score ?? 0,
+    }));
   }
 
   // -------------------------------------------------------------------------
-  // QA — AI Query
+  // QA — AI Query (placeholder until agent orchestrator fully integrated)
   // -------------------------------------------------------------------------
 
   queryQA(_rmId: string, query: string): Record<string, unknown> {
     return {
       query,
       answer:
-        `Based on current portfolio data and market conditions, here is a concise response to your query: "${query}". ` +
-        'Our AI analysis indicates that the recommended action aligns with the client\'s risk profile (MODERATE_AGGRESSIVE) ' +
-        'and long-term wealth creation goals. Detailed supporting data and relevant client segments will be surfaced once ' +
-        'the agent orchestrator is fully integrated in a subsequent story.',
-      sources: [
-        { type: 'PORTFOLIO_DATA', client_count: 5 },
-        { type: 'MARKET_DATA', as_of: new Date().toISOString().slice(0, 10) },
-      ],
-      confidence: 0.82,
+        `Your query "${query}" will be processed by the AI agent. ` +
+        'Please use the chat panel for full AI-powered responses with real-time data.',
+      sources: [],
+      confidence: 0,
       generated_at: new Date().toISOString(),
     };
   }

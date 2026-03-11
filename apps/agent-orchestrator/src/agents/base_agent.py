@@ -94,15 +94,15 @@ class BaseAgent(ABC):
         Returns:
             Complete system prompt string.
         """
-        name = rm_identity.get("name", "RM")
-        branch = rm_identity.get("branch", "Unknown Branch")
-        client_count = rm_identity.get("client_count", 0)
-        aum_cr = rm_identity.get("aum_cr", 0.0)
+        # Support both key variants (rm_name/name, rm_branch/branch)
+        name = rm_identity.get("rm_name") or rm_identity.get("name", "RM")
+        branch = rm_identity.get("rm_branch") or rm_identity.get("branch", "")
+        branch_str = f" ({branch} branch)" if branch else ""
 
         identity_block = (
-            f"You are assisting {name}, a Relationship Manager at Nuvama Wealth "
-            f"Management ({branch} branch). They manage {client_count} clients with "
-            f"a total AUM of {self.format_indian_number(aum_cr * 10_000_000)}.\n\n"
+            f"You are assisting {name}, a Relationship Manager at Nuvama Wealth Management{branch_str}.\n"
+            f"IMPORTANT: Do NOT assume you know the counts or values. "
+            f"ALWAYS call the available tools to fetch real, current data before answering.\n\n"
         )
 
         specialist_block = self.get_specialist_prompt()

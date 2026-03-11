@@ -8,7 +8,10 @@
       "Read(//Users/namandeepbhatia/Desktop/AI RM Assistant/rm-buddy/**)",
       "Bash(done)",
       "Bash(npx tsc:*)",
-      "Bash(brew install:*)"
+      "Bash(brew install:*)",
+      "Bash(cd \"/Users/surya/Desktop/Vibe/AI RM Assistant/rm-buddy/apps/gateway\" && npm run build 2>&1 | tail -3 && pm2 restart rm-gateway 2>&1 | tail -5)",
+      "Bash(curl -s -H \"Origin: http://localhost:5174\" -I http://localhost:3000/api/v1/rm/list 2>&1 | grep -i \"access-control\")",
+      "Bash(sleep 2 && curl -s -H \"Origin: http://localhost:5174\" -I http://localhost:3000/api/v1/rm/list 2>&1 | grep -i \"access-control\")"
     ]
   }
 }

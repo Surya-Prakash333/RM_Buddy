@@ -18,13 +18,14 @@ export interface ChatMessage {
   timestamp: Date;
 }
 
+// Orchestrator returns this shape directly (no data wrapper)
 interface AgentChatResponse {
-  status: 'success' | 'error';
-  data: {
-    response: string;
-    widgets: WidgetPayload[];
-    intent: string;
-  };
+  text: string;
+  widgets: WidgetPayload[];
+  response_type: string;
+  session_id: string;
+  message_id: string;
+  metadata?: { intent?: string };
 }
 
 export interface UseChatReturn {
@@ -81,9 +82,10 @@ export function useChat(): UseChatReturn {
       const apiUrl = import.meta.env.VITE_API_URL ?? '';
 
       try {
+        const rmId = rmIdentity?.rm_id ?? '';
         const response = await axios.post<AgentChatResponse>(
           `${apiUrl}/api/v1/agent/chat`,
-          { message: trimmed, session_id: sessionId },
+          { message: trimmed, session_id: sessionId, rm_id: rmId },
           {
             headers: {
               'Content-Type': 'application/json',
@@ -92,7 +94,10 @@ export function useChat(): UseChatReturn {
           },
         );
 
-        const { response: agentText, widgets } = response.data.data;
+        const raw = response.data;
+        // Support both direct shape { text, widgets } and wrapped { data: { response, widgets } }
+        const agentText = (raw as unknown as { data?: { response?: string } }).data?.response ?? raw.text ?? '';
+        const widgets = raw.widgets;
 
         const assistantMsg: ChatMessage = {
           id: generateId(),

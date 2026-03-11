@@ -84,8 +84,8 @@ def build_client_table(clients: str, title: str = "Clients") -> dict[str, Any]:
 
     Args:
         clients: JSON string of client list.  Each entry should contain:
-                 name (str), tier (str), aum (str), last_interaction (str).
-                 Example: '[{"name":"Ravi Kumar","tier":"Platinum","aum":"₹42 Cr","last_interaction":"3 days ago"}]'
+                 client_name (str), tier (str), aum (str), last_interaction (str).
+                 Example: '[{"client_name":"Ravi Kumar","tier":"Platinum","aum":"₹42 Cr","last_interaction":"3 days ago"}]'
         title: Table title shown as the widget header.
 
     Returns:
@@ -103,7 +103,7 @@ def build_client_table(clients: str, title: str = "Clients") -> dict[str, Any]:
         }
 
     columns = [
-        {"key": "name", "label": "Client Name"},
+        {"key": "client_name", "label": "Client Name"},
         {"key": "tier", "label": "Tier"},
         {"key": "aum", "label": "AUM"},
         {"key": "last_interaction", "label": "Last Contact"},

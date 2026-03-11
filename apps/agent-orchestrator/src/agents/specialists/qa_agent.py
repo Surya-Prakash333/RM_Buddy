@@ -21,6 +21,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+from config.settings import settings
 from typing import Any
 
 from langchain_core.tools import BaseTool
@@ -61,8 +62,8 @@ def _make_llm(tools: list[BaseTool]):
     from langchain_openai import ChatOpenAI
 
     llm = ChatOpenAI(
-        base_url=os.getenv("LITELLM_URL", "http://localhost:4000") + "/v1",
-        api_key=os.getenv("LITELLM_MASTER_KEY", "sk-dummy"),
+        base_url=f"{settings.litellm_url}/v1",
+        api_key=settings.litellm_master_key,
         model="claude-default",
     )
     return llm.bind_tools(tools)
@@ -252,11 +253,16 @@ class QAAgent(BaseAgent):
                             exc,
                         )
 
-        response_text = (
-            response.content
-            if hasattr(response, "content") and response.content
-            else str(response)
-        )
+        # Use content if present; otherwise synthesise from widget data
+        if hasattr(response, "content") and response.content:
+            response_text = response.content
+        elif widgets:
+            w = widgets[0]
+            val = w.get("data", {}).get("value", "")
+            title = w.get("title", "")
+            response_text = f"{title}: {val}" if val else title
+        else:
+            response_text = "Here is the data you requested." if state.get("tool_results") else "No data found."
 
         return {
             **state,

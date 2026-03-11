@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { KafkaConsumerService, KAFKA_CONSUMER } from './kafka-consumer.service';
 import { KafkaProducerService, KAFKA_PRODUCER } from './kafka-producer.service';
+import { AlertsModule } from '../alerts/alerts.module';
 
 /**
  * KafkaModule wires KafkaJS consumer and producer for the Communication Service.
@@ -14,6 +15,7 @@ import { KafkaProducerService, KAFKA_PRODUCER } from './kafka-producer.service';
  * Producer: used to publish alerts.delivered confirmations.
  */
 @Module({
+  imports: [forwardRef(() => AlertsModule)],
   providers: [
     // -------------------------------------------------------------------------
     // Kafka consumer client — injected via Symbol token

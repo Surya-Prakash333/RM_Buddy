@@ -142,8 +142,8 @@ class EngagementAgent(BaseAgent):
             llm = self.llm
         else:
             llm = ChatOpenAI(
-                base_url=os.getenv("LITELLM_URL", "http://localhost:4000") + "/v1",
-                api_key=os.getenv("LITELLM_MASTER_KEY", "sk-dummy"),
+                base_url="http://localhost:4000/v1",
+                api_key=os.getenv("LITELLM_MASTER_KEY", ""),
                 model="claude-default",
             )
 

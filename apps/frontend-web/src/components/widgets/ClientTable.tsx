@@ -72,7 +72,7 @@ export function ClientTable({
     }
   }
 
-  const sorted = sortRows(data.clients, sortKey, sortDir);
+  const sorted = sortRows(Array.isArray(data.clients) ? data.clients : [], sortKey, sortDir);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">

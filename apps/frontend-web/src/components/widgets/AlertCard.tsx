@@ -106,7 +106,7 @@ export function AlertCard({ title, data, actions, onAction }: AlertCardProps): R
           {/* Alert type label */}
           <span className="flex items-center gap-1 text-xs text-gray-400">
             <Bell className="w-3 h-3" />
-            {data.alert_type.replace(/_/g, ' ')}
+            {(data.alert_type ?? '').replace(/_/g, ' ')}
           </span>
           {/* Severity badge */}
           <span
