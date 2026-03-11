@@ -1,36 +1,27 @@
 model_list:
-  # Primary model - GPT-4o for all agent reasoning tasks
+  # Primary model - Llama 3.3 70B for all agent reasoning tasks
   - model_name: claude-default
     litellm_params:
-      model: custom_openai/openai/gpt-oss-120b
-      api_base: https://api.groq.com/openai/v1
+      model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
       max_tokens: 4096
       temperature: 0.3
 
-  # Fallback - GPT-4o-mini for cost savings
+  # Fallback - same model for reliability
   - model_name: gpt-fallback
     litellm_params:
-      model: custom_openai/openai/gpt-oss-120b
-      api_base: https://api.groq.com/openai/v1
+      model: groq/llama-3.3-70b-versatile
       api_key: os.environ/GROQ_API_KEY
       max_tokens: 4096
       temperature: 0.3
 
-  # Cost-optimized - GPT-4o-mini for summaries/less critical tasks
+  # Cost-optimized - smaller model for summaries/less critical tasks
   - model_name: gemini-cost
     litellm_params:
-      model: custom_openai/openai/gpt-oss-120b
-      api_base: https://api.groq.com/openai/v1
+      model: groq/llama-3.1-8b-instant
       api_key: os.environ/GROQ_API_KEY
       max_tokens: 2048
       temperature: 0.3
-
-  # Embeddings for vector search
-  - model_name: embedding-model
-    litellm_params:
-      model: text-embedding-3-small
-      api_key: os.environ/OPENAI_API_KEY
 
 router_settings:
   routing_strategy: least-busy

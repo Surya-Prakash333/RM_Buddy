@@ -10,8 +10,26 @@ from __future__ import annotations
 from enum import Enum
 
 
+class Intent(str, Enum):
+    """Unified 4-category intent taxonomy for the supervisor graph."""
+    QA = "qa"
+    ACTION = "action"
+    PROACTIVE = "proactive"
+    WIDGET = "widget"
+    UNKNOWN = "unknown"
+
+
+class FactCategory(str, Enum):
+    """Categories for long-term memory facts extracted post-conversation."""
+    PREFERENCE = "preference"
+    CLIENT_NOTE = "client_note"
+    DECISION = "decision"
+    PATTERN = "pattern"
+    RELATIONSHIP = "relationship"
+
+
 class IntentType(str, Enum):
-    """Seven-category intent taxonomy used by the classifier and router."""
+    """DEPRECATED: Use Intent enum instead. Kept for backward compat during migration."""
 
     VIEW_ALERTS = "view_alerts"
     MORNING_BRIEFING = "morning_briefing"

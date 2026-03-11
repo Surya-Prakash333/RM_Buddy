@@ -49,6 +49,26 @@ class Settings(BaseSettings):
     mongodb_uri: str = "mongodb://localhost:27017/rmbuddy"
 
     # -----------------------------------------------------------------------
+    # MongoDB — memory collections (direct Motor connection)
+    # -----------------------------------------------------------------------
+    memory_mongodb_uri: str = "mongodb://m1b.dev.pr.com:27017/RM_Buddy?directConnection=true"
+    memory_db_name: str = "RM_Buddy"
+
+    # -----------------------------------------------------------------------
+    # LLM model aliases (via LiteLLM proxy)
+    # -----------------------------------------------------------------------
+    llm_smart_model: str = "claude-default"     # 70b — for compose, portfolio, revenue, scoring
+    llm_fast_model: str = "gemini-cost"         # 8b — for classify, alert, engagement, document
+
+    # -----------------------------------------------------------------------
+    # Session / memory tuning
+    # -----------------------------------------------------------------------
+    session_ttl_seconds: int = 3600             # 1 hour Redis TTL for sessions
+    max_conversation_history: int = 20          # Max messages loaded from session
+    max_memory_facts: int = 10                  # Max preference facts loaded per request
+    max_recent_summaries: int = 3               # Recent conversation summaries loaded
+
+    # -----------------------------------------------------------------------
     # Agent runtime knobs
     # -----------------------------------------------------------------------
     max_agent_tokens: int = 4096

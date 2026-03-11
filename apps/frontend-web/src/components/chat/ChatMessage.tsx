@@ -14,13 +14,33 @@ import { WidgetRenderer } from '../widgets/WidgetRenderer';
 
 interface ChatMessageProps {
   message: ChatMessageType;
+  /** When true, renders a compact transcript-style bubble (no avatar, no widgets) */
+  compact?: boolean;
 }
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export function ChatMessage({ message }: ChatMessageProps): ReactElement {
+export function ChatMessage({ message, compact = false }: ChatMessageProps): ReactElement {
   const isUser = message.role === 'user';
 
+  // ── Compact mode (transcript-style, used in RMCompanionPanel) ────────────
+  if (compact) {
+    return (
+      <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} mb-1`}>
+        <div
+          className={
+            isUser
+              ? 'bg-gray-100 text-gray-700 rounded-2xl rounded-tr-sm px-3 py-2 text-sm leading-relaxed max-w-[85%]'
+              : 'bg-gray-50 border border-gray-200 text-gray-700 rounded-2xl rounded-tl-sm px-3 py-2 text-sm leading-relaxed max-w-[85%]'
+          }
+        >
+          <p className="whitespace-pre-wrap italic">{message.content}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Full mode ─────────────────────────────────────────────────────────────
   return (
     <div className={`flex w-full ${isUser ? 'justify-end' : 'justify-start'} mb-3`}>
       {/* Avatar — only for assistant */}

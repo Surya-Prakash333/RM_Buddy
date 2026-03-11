@@ -1,162 +1,137 @@
 """
-context_builder.py — Builds rich context dicts for agent processing.
+Pre-chat context assembly pipeline.
 
-The ContextBuilder fetches data from the Core API (NestJS) over HTTP and
-assembles normalised context dicts that are injected into AgentState.
-
-Two context types:
-    RM context     — branch, client_count, active_alerts_count, AUM totals.
-    Client context — individual client profile for conversations about one client.
-
-HTTP errors and timeouts are handled gracefully: on failure, an empty dict
-is returned so the agent can still respond with degraded (but safe) output.
-
-Callers inject an httpx.AsyncClient so the connection pool is shared with
-other components and properly closed during FastAPI shutdown.
+Loads session state, RM client summary, pending alerts, RM preferences,
+relevant memories, and recent conversation summaries — all concurrently.
 """
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 import httpx
+from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from config.settings import settings
+from tools.crm_tool import _build_headers
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("memory.context_builder")
 
 
 class ContextBuilder:
-    """
-    Builds rich context for agent processing from Core API data.
+    """Assembles the full context dict loaded before every chat interaction."""
 
-    Args:
-        http_client: A shared httpx.AsyncClient instance.
-                     Base URL and auth headers should be pre-configured.
-    """
+    def __init__(self, memory_db: AsyncIOMotorDatabase) -> None:
+        self._db = memory_db
 
-    _DASHBOARD_SUMMARY_PATH = "/api/v1/dashboard/summary"
-    _CLIENT_DETAIL_PATH = "/api/v1/clients/{client_id}"
-
-    def __init__(self, http_client: httpx.AsyncClient) -> None:
-        self.http = http_client
-
-    async def build_rm_context(self, rm_id: str) -> dict[str, Any]:
-        """
-        Build RM-level context for agent state enrichment.
-
-        Fetches:
-            GET {CORE_API_URL}/api/v1/dashboard/summary?rm_id=<rm_id>
-
-        Returns dict with keys (all optional — present only if API succeeds):
-            rm_id              str
-            name               str
-            branch             str
-            client_count       int
-            active_alerts_count int
-            aum_cr             float   (AUM in crores)
-
-        Returns an empty dict on any HTTP or network error.
-        """
-        url = f"{settings.core_api_url}{self._DASHBOARD_SUMMARY_PATH}"
-        try:
-            response = await self.http.get(
-                url,
-                params={"rm_id": rm_id},
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            data: dict[str, Any] = response.json()
-            logger.debug(
-                "RM context fetched [rm_id=%s, client_count=%s]",
-                rm_id,
-                data.get("client_count"),
-            )
-            return data
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "Core API returned error for RM context "
-                "[rm_id=%s, status=%s, url=%s]",
-                rm_id,
-                exc.response.status_code,
-                url,
-            )
-        except httpx.RequestError as exc:
-            logger.error(
-                "Network error fetching RM context [rm_id=%s, error=%s]",
-                rm_id,
-                exc,
-            )
-        except Exception as exc:
-            logger.error(
-                "Unexpected error building RM context [rm_id=%s, error=%s]",
-                rm_id,
-                exc,
-            )
-        return {}
-
-    async def build_client_context(
-        self, rm_id: str, client_id: str
+    async def build(
+        self, session_id: str, rm_id: str, query: str = ""
     ) -> dict[str, Any]:
         """
-        Build client-level context for conversations about a specific client.
+        Load all context sources concurrently and return assembled dict.
 
-        Fetches:
-            GET {CORE_API_URL}/api/v1/clients/{client_id}
+        Args:
+            session_id: Current session UUID.
+            rm_id: RM employee ID.
+            query: User's message (used for semantic memory matching).
 
-        The rm_id is sent as a query parameter so the Core API can enforce
-        ownership — an RM can only request clients assigned to them.
-
-        Returns dict with keys (all optional — present only if API succeeds):
-            client_id   str
-            name        str
-            tier        str   ('Platinum' | 'Gold' | 'Silver' | 'Bronze')
-            aum_cr      float
-            phone       str
-            email       str
-            birthdate   str   (ISO date)
-            last_contact str  (ISO datetime)
-
-        Returns an empty dict on any HTTP or network error.
+        Returns:
+            Dict with keys: session, clients, alerts, preferences, memories, summaries.
         """
-        url = f"{settings.core_api_url}{self._CLIENT_DETAIL_PATH.format(client_id=client_id)}"
+        results = await asyncio.gather(
+            self._load_session(session_id),
+            self._load_clients_summary(rm_id),
+            self._load_pending_alerts(rm_id),
+            self._load_preferences(rm_id),
+            self._load_relevant_memories(rm_id, query),
+            self._load_recent_summaries(rm_id),
+            return_exceptions=True,
+        )
+
+        context: dict[str, Any] = {}
+        keys = ["session", "clients", "alerts", "preferences", "memories", "summaries"]
+        for key, result in zip(keys, results):
+            if isinstance(result, Exception):
+                logger.warning("Context load failed [key=%s, error=%s]", key, result)
+                context[key] = [] if key != "session" else {}
+            else:
+                context[key] = result
+
+        return context
+
+    async def _load_session(self, session_id: str) -> dict[str, Any]:
+        """Load session state from MongoDB (Redis handled by SessionManager)."""
+        doc = await self._db["agent_sessions"].find_one(
+            {"session_id": session_id}, {"_id": 0}
+        )
+        return doc or {}
+
+    async def _load_clients_summary(self, rm_id: str) -> list[dict]:
+        """Load top 10 clients by AUM from Core API."""
         try:
-            response = await self.http.get(
-                url,
-                params={"rm_id": rm_id},
-                timeout=10.0,
-            )
-            response.raise_for_status()
-            data: dict[str, Any] = response.json()
-            logger.debug(
-                "Client context fetched [rm_id=%s, client_id=%s]",
-                rm_id,
-                client_id,
-            )
-            return data
-        except httpx.HTTPStatusError as exc:
-            logger.warning(
-                "Core API returned error for client context "
-                "[rm_id=%s, client_id=%s, status=%s]",
-                rm_id,
-                client_id,
-                exc.response.status_code,
-            )
-        except httpx.RequestError as exc:
-            logger.error(
-                "Network error fetching client context "
-                "[rm_id=%s, client_id=%s, error=%s]",
-                rm_id,
-                client_id,
-                exc,
-            )
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(
+                    f"{settings.core_api_url}/api/v1/clients",
+                    params={"limit": 10},
+                    headers=_build_headers(),
+                )
+            if resp.status_code < 400:
+                raw = resp.json()
+                data = raw.get("data", raw)
+                return data if isinstance(data, list) else []
         except Exception as exc:
-            logger.error(
-                "Unexpected error building client context "
-                "[rm_id=%s, client_id=%s, error=%s]",
-                rm_id,
-                client_id,
-                exc,
-            )
-        return {}
+            logger.warning("Failed to load clients summary: %s", exc)
+        return []
+
+    async def _load_pending_alerts(self, rm_id: str) -> list[dict]:
+        """Load pending alerts from Core API."""
+        try:
+            async with httpx.AsyncClient(timeout=8.0) as client:
+                resp = await client.get(
+                    f"{settings.core_api_url}/api/v1/alerts",
+                    params={"status": "pending"},
+                    headers=_build_headers(),
+                )
+            if resp.status_code < 400:
+                raw = resp.json()
+                data = raw.get("data", raw)
+                return data if isinstance(data, list) else []
+        except Exception as exc:
+            logger.warning("Failed to load alerts: %s", exc)
+        return []
+
+    async def _load_preferences(self, rm_id: str) -> list[dict]:
+        """Load RM preference facts from memory DB."""
+        cursor = self._db["rm_facts"].find(
+            {"rm_id": rm_id, "category": "preference", "active": True},
+            {"_id": 0, "content": 1, "confidence": 1},
+        ).sort("confidence", -1).limit(settings.max_memory_facts)
+        return await cursor.to_list(length=settings.max_memory_facts)
+
+    async def _load_relevant_memories(self, rm_id: str, query: str) -> list[dict]:
+        """Load memories relevant to the query (text match for now; vector search future)."""
+        if not query:
+            return []
+        keywords = [w for w in query.lower().split() if len(w) > 3]
+        if not keywords:
+            return []
+        regex_pattern = "|".join(keywords[:5])
+        cursor = self._db["rm_facts"].find(
+            {
+                "rm_id": rm_id,
+                "active": True,
+                "content": {"$regex": regex_pattern, "$options": "i"},
+            },
+            {"_id": 0, "category": 1, "content": 1, "confidence": 1},
+        ).limit(5)
+        return await cursor.to_list(length=5)
+
+    async def _load_recent_summaries(self, rm_id: str) -> list[dict]:
+        """Load last N conversation summaries."""
+        cursor = self._db["conversation_summaries"].find(
+            {"rm_id": rm_id},
+            {"_id": 0, "summary": 1, "topics": 1, "clients_discussed": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(settings.max_recent_summaries)
+        return await cursor.to_list(length=settings.max_recent_summaries)

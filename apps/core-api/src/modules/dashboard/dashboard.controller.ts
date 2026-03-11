@@ -77,7 +77,7 @@ export class DashboardController {
     @Query() filter: FilterDto,
   ): Promise<ApiResponse<unknown>> {
     this.logger.log(`getClients rm_id=${identity.rm_id}`);
-    return buildResponse(await this.dashboardService.getClients(identity.rm_id, filter.search));
+    return buildResponse(await this.dashboardService.getClients(identity.rm_id, filter.search, filter.tier));
   }
 
   @Get('clients/:id')

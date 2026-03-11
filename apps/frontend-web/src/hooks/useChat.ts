@@ -6,6 +6,7 @@
 import { useState, useCallback } from 'react';
 import axios from 'axios';
 import { useAuthStore } from '@/store/auth.store';
+import { useWidgetStore } from '@/store/widget.store';
 import type { WidgetPayload } from '@/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export function useChat(): UseChatReturn {
   const [error, setError] = useState<string | null>(null);
 
   const rmIdentity = useAuthStore((s) => s.rmIdentity);
+  const setWidgets = useWidgetStore((s) => s.setWidgets);
 
   const sendMessage = useCallback(
     async (text: string): Promise<void> => {
@@ -98,6 +100,11 @@ export function useChat(): UseChatReturn {
         // Support both direct shape { text, widgets } and wrapped { data: { response, widgets } }
         const agentText = (raw as unknown as { data?: { response?: string } }).data?.response ?? raw.text ?? '';
         const widgets = raw.widgets;
+
+        // Push widgets to the global store for the right-side panel
+        if (widgets?.length) {
+          setWidgets(widgets);
+        }
 
         const assistantMsg: ChatMessage = {
           id: generateId(),

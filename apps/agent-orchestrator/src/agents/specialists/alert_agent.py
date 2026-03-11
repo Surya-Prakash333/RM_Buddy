@@ -1,8 +1,8 @@
 """
 alert_agent.py — Unified specialist agent for all 16 alert types.
 
-Receives an alert dict from orchestrator context, generates a type-specific
-recommendation using LLM, returns the recommendation text + AlertCard widget.
+Fetches alerts from Core API for the RM, generates type-specific
+recommendations using LLM, returns the recommendation text + AlertCard widgets.
 """
 
 from __future__ import annotations
@@ -13,8 +13,11 @@ import os
 from config.settings import settings
 from typing import Any
 
+import httpx
+
 from agents.base_agent import BaseAgent
 from graphs.state import AgentState
+from tools.crm_tool import _build_headers
 
 logger = logging.getLogger("agent.alert_agent")
 
@@ -145,11 +148,69 @@ class AlertAgent(BaseAgent):
         )
 
     async def process(self, state: AgentState) -> dict:
-        """Run two-step pipeline: build prompt → call LLM → return widget."""
-        # Step 1: extract alert and build prompt
-        state_after_analyze = await self._analyze_alert(state)
-        # Step 2: generate recommendation
-        return await self._generate_recommendation(state_after_analyze)
+        """
+        Fetch all pending alerts from Core API, generate LLM recommendations
+        for the top alerts, and return widgets for each.
+        """
+        alerts = await self._fetch_alerts_from_api()
+
+        if not alerts:
+            return {
+                "response": "You have no pending alerts right now. Everything looks good!",
+                "widgets": [],
+                "tool_results": [],
+            }
+
+        # Process top alerts (limit to 5 for latency)
+        top_alerts = alerts[:5]
+        all_widgets = []
+        summaries = []
+
+        for alert in top_alerts:
+            # Build state with alert in context for _analyze_alert
+            alert_state = {**state, "context": {"alert": alert}}
+            state_after_analyze = await self._analyze_alert(alert_state)
+            result = await self._generate_recommendation(state_after_analyze)
+            if result.get("widgets"):
+                all_widgets.extend(result["widgets"])
+            if result.get("response"):
+                summaries.append(result["response"])
+
+        total = len(alerts)
+        summary_text = (
+            f"You have {total} pending alert{'s' if total != 1 else ''}. "
+            f"Here are the top {len(top_alerts)}:\n\n"
+            + "\n\n".join(f"**{i+1}.** {s}" for i, s in enumerate(summaries))
+        )
+
+        return {
+            "response": summary_text,
+            "widgets": all_widgets,
+            "tool_results": [{"tool": "get_alerts", "result": {"total": total}}],
+        }
+
+    async def _fetch_alerts_from_api(self) -> list[dict]:
+        """Fetch pending alerts from Core API for this RM."""
+        core_api = os.getenv("CORE_API_URL", settings.core_api_url)
+        url = f"{core_api}/api/v1/alerts"
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.get(
+                    url,
+                    params={"status": "pending", "limit": 20},
+                    headers=_build_headers(),
+                )
+            if resp.status_code >= 400:
+                logger.error("AlertAgent fetch_alerts HTTP %s", resp.status_code)
+                return []
+            raw = resp.json()
+            data = raw.get("data", raw)
+            if isinstance(data, list):
+                return data
+            return data.get("alerts", []) if isinstance(data, dict) else []
+        except Exception as exc:
+            logger.error("AlertAgent fetch_alerts error: %s", exc)
+            return []
 
     # ------------------------------------------------------------------
     # Internal pipeline steps

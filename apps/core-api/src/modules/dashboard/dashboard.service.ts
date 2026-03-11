@@ -296,10 +296,13 @@ export class DashboardService {
   // Clients — Already queries MongoDB
   // -------------------------------------------------------------------------
 
-  async getClients(rmId: string, search?: string): Promise<Record<string, unknown>[]> {
+  async getClients(rmId: string, search?: string, tier?: string): Promise<Record<string, unknown>[]> {
     const query: Record<string, any> = { rm_id: rmId };
     if (search) {
       query.client_name = { $regex: search, $options: 'i' };
+    }
+    if (tier) {
+      query.tier = { $regex: `^${tier}$`, $options: 'i' };
     }
 
     const docs = await this.connection.db!

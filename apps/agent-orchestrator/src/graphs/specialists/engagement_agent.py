@@ -1,0 +1,32 @@
+"""Engagement specialist — interaction gaps, contact frequency, follow-ups."""
+
+from __future__ import annotations
+from typing import Any
+
+from langchain_openai import ChatOpenAI
+from langgraph.prebuilt import create_react_agent
+
+from config.settings import settings
+from graphs.state import AgentState
+from prompts.specialist_prompts import ENGAGEMENT_AGENT_PROMPT
+from tools.crm_tool import get_client_list, get_client_profile
+
+
+def _make_agent():
+    llm = ChatOpenAI(
+        base_url=f"{settings.litellm_url}/v1",
+        api_key=settings.litellm_master_key,
+        model=settings.llm_fast_model,
+    )
+    return create_react_agent(
+        llm,
+        tools=[get_client_list, get_client_profile],
+        prompt=ENGAGEMENT_AGENT_PROMPT,
+    )
+
+
+async def run_engagement_agent(state: AgentState) -> dict[str, Any]:
+    agent = _make_agent()
+    result = await agent.ainvoke({"messages": state["messages"]})
+    text = result["messages"][-1].content if result["messages"] else ""
+    return {"specialist_results": {"engagement": text}}

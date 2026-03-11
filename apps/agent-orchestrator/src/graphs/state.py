@@ -1,64 +1,71 @@
 """
-state.py — AgentState TypedDict for the LangGraph orchestrator.
+state.py — AgentState TypedDict for the supervisor graph.
 
-LangGraph requires a TypedDict to define the shape of state flowing through
-the graph.  The `messages` field uses the `add_messages` reducer so that
-appending to conversation history is safe across parallel branches.
-
-All Optional fields start as None and are populated by the graph nodes.
-Fields are populated in order:
-
-  input_guard       → validates message, populates guardrail_flags on violation
-  classify_intent   → intent, intent_confidence
-  route_agent       → (no state change; routing only)
-  execute_agent     → tool_results, response, widgets
-  output_guard      → may set error, redact response
-  compose_response  → final response ready for serialisation
+Expanded from the original orchestrator state to support:
+- Parallel specialist dispatch (active_specialists, specialist_results)
+- Context builder output (loaded_context)
+- New intent taxonomy (Intent enum)
+- Guardrail results (guardrail_blocked, guardrail_reason)
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Optional
+from typing import Annotated, Any, Optional
 
 from langgraph.graph import add_messages
 from typing_extensions import TypedDict
 
 
 class AgentState(TypedDict):
-    """Full state bag passed between every node in the orchestrator graph."""
+    """Full state bag passed between every node in the supervisor graph."""
 
     # ------------------------------------------------------------------
-    # Input — populated from AgentRequest before graph invocation
+    # Input — populated from request before graph invocation
     # ------------------------------------------------------------------
     rm_id: str
-    rm_role: str           # 'RM' | 'BM' | 'ADMIN'
+    rm_role: str                        # 'RM' | 'BM' | 'ADMIN'
     session_id: str
+    conversation_id: str
     message: str
-    message_type: str      # 'text' | 'voice_transcript'
+    message_type: str                   # 'text' | 'voice_transcript'
 
     # ------------------------------------------------------------------
-    # Processing — enriched by classification / context nodes
+    # Context — populated by build_context node
     # ------------------------------------------------------------------
-    intent: Optional[str]           # IntentType string value
-    intent_confidence: float        # 0.0 – 1.0
-    rm_context: Optional[dict]      # RM's branch, client_count, AUM, etc.
-    client_context: Optional[dict]  # Active client being discussed (if any)
+    rm_context: Optional[dict]          # RM identity from request header
+    client_context: Optional[dict]      # Active client being discussed
+    loaded_context: Optional[dict]      # Full context from ContextBuilder:
+                                        #   session, clients, alerts, preferences,
+                                        #   memories, summaries
 
     # ------------------------------------------------------------------
-    # Results — populated by execute_agent
+    # Classification — populated by classify_intent node
     # ------------------------------------------------------------------
-    tool_results: list[dict]        # Raw results from tool calls
-    response: Optional[str]         # Final prose text
-    widgets: list[dict]             # List of WidgetPayload-compatible dicts
+    intent: Optional[str]               # Intent enum value
+    intent_confidence: float            # 0.0 – 1.0
+    active_specialists: list[str]       # Which specialist agents to dispatch
+
+    # ------------------------------------------------------------------
+    # Specialist results — populated by dispatch_specialists node
+    # ------------------------------------------------------------------
+    specialist_results: dict[str, str]  # {"alert": "text", "portfolio": "text", ...}
+
+    # ------------------------------------------------------------------
+    # Final output — populated by compose_response node
+    # ------------------------------------------------------------------
+    tool_results: list[dict]            # Raw results from tool calls
+    response: Optional[str]             # Final prose text
+    widgets: list[dict]                 # List of WidgetPayload-compatible dicts
 
     # ------------------------------------------------------------------
     # Control flow
     # ------------------------------------------------------------------
-    guardrail_flags: list[str]      # Non-empty triggers output_guard action
-    error: Optional[str]            # Set when an unrecoverable error occurs
+    guardrail_blocked: bool
+    guardrail_reason: Optional[str]
+    guardrail_flags: list[str]          # Detailed flags for metadata
+    error: Optional[str]
 
     # ------------------------------------------------------------------
     # LangGraph conversation history
-    # Annotated with add_messages reducer — appends rather than overwrites.
     # ------------------------------------------------------------------
     messages: Annotated[list, add_messages]

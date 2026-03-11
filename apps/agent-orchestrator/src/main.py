@@ -1,18 +1,8 @@
 """
 main.py — FastAPI application entrypoint for the RM Buddy Agent Orchestrator.
 
-Endpoints:
-    POST /agent/chat       Main conversational endpoint for RMs and BMs.
-    POST /agent/proactive  Triggered by comm-service for proactive alert processing.
-    GET  /health           Liveness check for load balancers and PM2.
-
-Startup / shutdown lifespan:
-    - Initialises shared HTTP client (httpx), Redis, and Motor connections.
-    - Builds the OrchestratorGraph once (expensive compile step happens once).
-    - Cleanly closes all connections on shutdown.
-
-All state (LLM client, graph, memory) is injected via FastAPI app.state so
-that tests can swap implementations without monkey-patching.
+Thin bootstrapper: initialises shared resources (Redis, Motor, LLM), compiles
+the supervisor graph, and mounts API routers.
 """
 
 from __future__ import annotations
@@ -22,19 +12,20 @@ import sys
 from contextlib import asynccontextmanager
 from typing import Any, AsyncGenerator
 
-import httpx
 import redis.asyncio as aioredis
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from motor.motor_asyncio import AsyncIOMotorClient
 
-from config.llm_config import get_llm_client
 from config.settings import settings
-from graphs.orchestrator import OrchestratorGraph
-from memory.session_memory import SessionMemory
+from graphs.supervisor import SupervisorGraph
+from memory.context_builder import ContextBuilder
+from memory.session_manager import SessionManager
+
+# Legacy imports — kept so existing /agent/proactive and /health still work
 from models.schemas import AgentRequest, AgentResponse
 
 # ---------------------------------------------------------------------------
-# Logging setup — structured JSON in production, plain in debug
+# Logging
 # ---------------------------------------------------------------------------
 logging.basicConfig(
     stream=sys.stdout,
@@ -45,25 +36,14 @@ logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Application lifespan (startup + shutdown)
+# Lifespan — startup / shutdown
 # ---------------------------------------------------------------------------
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Manage shared resources across the application lifetime."""
     logger.info("Starting up %s on port %s", settings.app_name, settings.port)
 
-    # LLM client
-    llm_client = get_llm_client()
-
-    # HTTP client for Core API calls
-    http_client = httpx.AsyncClient(
-        base_url=settings.core_api_url,
-        timeout=15.0,
-        headers={"Content-Type": "application/json"},
-    )
-
-    # Redis — working memory
+    # Redis
     redis_kwargs: dict[str, Any] = {
         "host": settings.redis_host,
         "port": settings.redis_port,
@@ -73,199 +53,74 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         redis_kwargs["password"] = settings.redis_password
     redis_client = aioredis.Redis(**redis_kwargs)
 
-    # MongoDB — persistent history
-    mongo_client = AsyncIOMotorClient(settings.mongodb_uri)
+    # Motor — direct connection for memory collections
+    motor_client = AsyncIOMotorClient(settings.memory_mongodb_uri)
+    memory_db = motor_client[settings.memory_db_name]
 
-    # Session memory
-    session_memory = SessionMemory(
-        redis_client=redis_client,
-        mongo_client=mongo_client,
-        ttl=settings.working_memory_ttl,
-    )
+    # Context builder
+    context_builder = ContextBuilder(memory_db=memory_db)
 
-    # Build orchestrator graph (compile happens here once)
-    orchestrator = OrchestratorGraph(llm_client=llm_client, tools=[])
+    # Session manager
+    session_manager = SessionManager(redis_client=redis_client, memory_db=memory_db)
 
-    # Attach everything to app.state for dependency injection
-    app.state.llm_client = llm_client
-    app.state.http_client = http_client
+    # Supervisor graph
+    supervisor = SupervisorGraph(context_builder=context_builder)
+
+    # Attach to app.state
     app.state.redis_client = redis_client
-    app.state.mongo_client = mongo_client
-    app.state.session_memory = session_memory
-    app.state.orchestrator = orchestrator
+    app.state.motor_client = motor_client
+    app.state.memory_db = memory_db
+    app.state.context_builder = context_builder
+    app.state.session_manager = session_manager
+    app.state.supervisor = supervisor
 
     logger.info("All services initialised — ready to accept requests")
-
     yield
 
-    # ------------------------------------------------------------------
     # Shutdown
-    # ------------------------------------------------------------------
     logger.info("Shutting down %s", settings.app_name)
-    await http_client.aclose()
     await redis_client.aclose()
-    mongo_client.close()
+    motor_client.close()
     logger.info("Shutdown complete")
 
 
 # ---------------------------------------------------------------------------
-# FastAPI application
+# FastAPI app
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
     title="RM Buddy Agent Orchestrator",
-    version="1.0.0",
+    version="2.0.0",
     description=(
         "LangGraph-based AI agent orchestrator for Nuvama Wealth Management. "
-        "Routes RM/BM messages through intent classification → specialist agents."
+        "Parallel specialist dispatch with memory, streaming, and RAG."
     ),
     lifespan=lifespan,
 )
 
+# Mount API routers
+from api.v1.chat import router as chat_router
+from api.v1.stream import router as stream_router
 
-# ---------------------------------------------------------------------------
-# Dependency helpers
-# ---------------------------------------------------------------------------
-
-def get_orchestrator(request: Request) -> OrchestratorGraph:
-    return request.app.state.orchestrator
-
-
-def get_session_memory(request: Request) -> SessionMemory:
-    return request.app.state.session_memory
+app.include_router(chat_router, prefix="/agent", tags=["Chat"])
+app.include_router(stream_router, prefix="/agent", tags=["Streaming"])
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# Legacy endpoints (kept for backward compat)
 # ---------------------------------------------------------------------------
 
-@app.post(
-    "/agent/chat",
-    response_model=AgentResponse,
-    summary="Process an RM or BM message through the agent orchestrator.",
-)
-async def chat(
-    raw_request: Request,
-    request: AgentRequest,
-    orchestrator: OrchestratorGraph = Depends(get_orchestrator),
-    memory: SessionMemory = Depends(get_session_memory),
-) -> AgentResponse:
-    """
-    Main chat endpoint.
-
-    Flow:
-      1. Parse X-RM-Identity header injected by gateway.
-      2. Append the user message to persistent history.
-      3. Run the LangGraph orchestrator.
-      4. Append the assistant response to persistent history.
-      5. Return the AgentResponse.
-    """
-    import json as _json
-
-    # Read X-RM-Identity header (injected by gateway auth middleware)
-    rm_identity: dict = {}
-    identity_header = raw_request.headers.get("x-rm-identity", "")
-    if identity_header:
-        try:
-            rm_identity = _json.loads(identity_header)
-        except Exception:
-            pass
-
-    # Fallback for direct dev calls (no gateway)
-    if not rm_identity:
-        rm_identity = {"rm_id": request.rm_id, "role": "RM"}
-
-    # Inject rm_identity into context so orchestrator passes it to tools
-    merged_context = dict(request.context or {})
-    merged_context["rm_context"] = rm_identity
-    merged_context["rm_role"] = rm_identity.get("role", "RM")
-    request = AgentRequest(
-        rm_id=request.rm_id,
-        session_id=request.session_id,
-        message=request.message,
-        message_type=request.message_type,
-        context=merged_context,
-    )
-
-    logger.info(
-        "Chat request received [rm_id=%s, session_id=%s, message_preview=%.60s]",
-        request.rm_id,
-        request.session_id,
-        request.message,
-    )
-
-    # Persist user turn
-    await memory.append_message(
-        request.session_id,
-        {"role": "user", "content": request.message, "rm_id": request.rm_id},
-    )
-
-    try:
-        response = await orchestrator.run(request)
-    except Exception as exc:
-        logger.error(
-            "Unhandled orchestrator error [rm_id=%s, error=%s]",
-            request.rm_id,
-            exc,
-        )
-        raise HTTPException(status_code=500, detail="Internal orchestrator error") from exc
-
-    # Persist assistant turn
-    if response.text:
-        await memory.append_message(
-            request.session_id,
-            {
-                "role": "assistant",
-                "content": response.text,
-                "agent_id": response.agent_id,
-                "message_id": response.message_id,
-            },
-        )
-
-    return response
-
-
-@app.post(
-    "/agent/proactive",
-    summary="Handle proactive alert processing triggered by comm-service.",
-)
-async def proactive(
-    payload: dict[str, Any],
-    orchestrator: OrchestratorGraph = Depends(get_orchestrator),
-) -> dict[str, Any]:
-    """
-    Proactive alert endpoint.
-
-    Called by the comm-service (or Kafka consumer) when an alert is
-    generated and needs to be enriched with AI commentary before delivery.
-
-    Payload keys (all optional in this story — enriched in S1/S2):
-        rm_id       str — target RM
-        alert_type  str — 'birthday' | 'idle_cash' | 'maturity' | etc.
-        data        dict — alert-specific payload
-
-    Returns a dict with an 'enriched_text' key added by the agent.
-    """
-    logger.info(
-        "Proactive alert received [rm_id=%s, alert_type=%s]",
-        payload.get("rm_id"),
-        payload.get("alert_type"),
-    )
-
-    # Stub — enrichment logic added in S1
+@app.post("/agent/proactive", summary="Handle proactive alert processing.")
+async def proactive(payload: dict[str, Any]) -> dict[str, Any]:
+    logger.info("Proactive alert [rm_id=%s, type=%s]", payload.get("rm_id"), payload.get("alert_type"))
     return {
         "status": "received",
         "rm_id": payload.get("rm_id"),
         "alert_type": payload.get("alert_type"),
-        "enriched_text": None,  # populated by specialist agents in S1
+        "enriched_text": None,
     }
 
 
 @app.get("/health", summary="Liveness check.")
 async def health() -> dict[str, str]:
-    """Return service health status."""
-    return {
-        "status": "ok",
-        "service": settings.app_name,
-        "version": "1.0.0",
-    }
+    return {"status": "ok", "service": settings.app_name, "version": "2.0.0"}

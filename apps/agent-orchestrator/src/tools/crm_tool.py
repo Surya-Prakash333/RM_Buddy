@@ -1,31 +1,13 @@
 """
 crm_tool.py — LangChain tools for CRM data access via Core API.
 
-All tools issue authenticated HTTP requests to the NestJS Core API using the
-X-RM-Identity header.  The header value is a JSON-serialised RMIdentity dict
-set by the orchestrator before invoking any agent tools.
-
-Tools:
-    get_client_list      — Paginated, filterable client list.
-    get_client_profile   — Full profile for a single client.
-    get_client_portfolio — Holdings and AUM summary for a single client.
-    get_alerts           — Pending / delivered / acknowledged alerts for the RM.
-    get_dashboard_summary— KPI summary (total clients, active alerts, AUM, etc.).
-
-Context injection:
-    set_rm_context(rm_identity) must be called by the orchestrator before any
-    agent tool is invoked within a request cycle.
-
-Thread-safety note:
-    _current_rm_identity is a module-level dict. This is safe for single-process
-    uvicorn (one async event loop per worker), because each request awaits
-    set_rm_context before the first tool call and no context switch occurs
-    between set and read within a single coroutine chain.
-    TODO: Migrate to contextvars.ContextVar for multi-worker deployments.
+Uses contextvars.ContextVar for thread-safe RM identity context, enabling
+parallel specialist agent dispatch via asyncio.gather().
 """
 
 from __future__ import annotations
 
+import contextvars
 import json
 import logging
 from typing import Any, Optional
@@ -38,38 +20,29 @@ from config.settings import settings
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# RM identity context — set by orchestrator before agent tool calls
+# RM identity context — ContextVar for async-safe parallel dispatch
 # ---------------------------------------------------------------------------
 
-_current_rm_identity: dict[str, Any] = {}
+_rm_context_var: contextvars.ContextVar[dict[str, Any]] = contextvars.ContextVar(
+    "rm_context", default={}
+)
 
 _HTTP_TIMEOUT = 10.0  # seconds
 
 
 def set_rm_context(rm_identity: dict[str, Any]) -> None:
     """
-    Set the RM identity context used to build the X-RM-Identity header.
+    Set the RM identity context for the current async task.
 
-    Must be called by the orchestrator before invoking any tool in a
-    request cycle.  The identity dict should contain at minimum:
-        rm_id, name, role (RM | BM | ADMIN), branch.
-
-    Args:
-        rm_identity: RMIdentity-compatible dict.
+    Thread/task safe: uses contextvars so parallel asyncio.gather() tasks
+    each get their own copy.
     """
-    global _current_rm_identity
-    _current_rm_identity = rm_identity
+    _rm_context_var.set(rm_identity)
 
 
 def _get_identity_header() -> str:
-    """
-    Serialise the current RM identity to a JSON string for the
-    X-RM-Identity header expected by the Core API AuthGuard.
-
-    Returns:
-        JSON string of the current RM identity dict.
-    """
-    return json.dumps(_current_rm_identity)
+    """Serialise the current RM identity to a JSON string for X-RM-Identity header."""
+    return json.dumps(_rm_context_var.get())
 
 
 def _build_headers() -> dict[str, str]:

@@ -38,3 +38,18 @@
     overflow: hidden;
   }
 }
+
+/* ── Voice avatar waveform animations ─────────────────────────────────────── */
+
+@keyframes waveBar {
+  0%   { height: 6px;  }
+  50%  { height: 24px; }
+  100% { height: 6px;  }
+}
+
+@keyframes wavePulse {
+  0%   { opacity: 0.4; height: 8px;  }
+  50%  { opacity: 1;   height: 18px; }
+  100% { opacity: 0.4; height: 8px;  }
+}
+

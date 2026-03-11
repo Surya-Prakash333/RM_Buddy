@@ -14,9 +14,9 @@ const router = Router();
  *   POST /api/v1/agent/chat
  *   GET  /api/v1/agent/health
  *
- * A 35-second proxy timeout is configured because LangGraph agent chains
- * can involve multiple LLM calls and tool executions. The default Node.js
- * socket timeout of 5 s would abort these prematurely.
+ * A 3-minute proxy timeout is configured because LangGraph agent chains
+ * involve multiple LLM calls across parallel specialists plus a compose step.
+ * With Groq free-tier rate limits, individual requests can take 60-120s.
  *
  * Middleware stack: rateLimiter → authForward → proxy
  * The health sub-path bypasses auth so ops tooling can check it without a
@@ -25,8 +25,8 @@ const router = Router();
 const agentProxy = createProxyMiddleware({
   target: config.agentOrchestratorUrl,
   changeOrigin: true,
-  proxyTimeout: 35000,
-  timeout: 35000,
+  proxyTimeout: 180000,
+  timeout: 180000,
   pathRewrite: { '^/api/v1/agent': '/agent' },
   onProxyReq: fixRequestBody,
   onError: (err: Error, _req, res) => {
