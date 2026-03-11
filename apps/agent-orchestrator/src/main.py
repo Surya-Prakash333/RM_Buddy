@@ -101,9 +101,11 @@ app = FastAPI(
 # Mount API routers
 from api.v1.chat import router as chat_router
 from api.v1.stream import router as stream_router
+from api.v1.sessions import router as sessions_router
 
 app.include_router(chat_router, prefix="/agent", tags=["Chat"])
 app.include_router(stream_router, prefix="/agent", tags=["Streaming"])
+app.include_router(sessions_router, prefix="/agent", tags=["Sessions"])
 
 
 # ---------------------------------------------------------------------------

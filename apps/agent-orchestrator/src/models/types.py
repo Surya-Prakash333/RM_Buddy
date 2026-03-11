@@ -31,6 +31,7 @@ class FactCategory(str, Enum):
 class IntentType(str, Enum):
     """DEPRECATED: Use Intent enum instead. Kept for backward compat during migration."""
 
+    GREETING = "greeting"
     VIEW_ALERTS = "view_alerts"
     MORNING_BRIEFING = "morning_briefing"
     CLIENT_QUERY = "client_query"

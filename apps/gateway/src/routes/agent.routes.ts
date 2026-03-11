@@ -47,6 +47,15 @@ const agentProxy = createProxyMiddleware({
 // POST /api/v1/agent/chat — requires auth
 router.post('/api/v1/agent/chat', rateLimiter, authForward, agentProxy);
 
+// GET /api/v1/agent/sessions — list past sessions (requires auth)
+router.get('/api/v1/agent/sessions', rateLimiter, authForward, agentProxy);
+
+// GET /api/v1/agent/sessions/:id — get session messages (requires auth)
+router.get('/api/v1/agent/sessions/:id', rateLimiter, authForward, agentProxy);
+
+// DELETE /api/v1/agent/sessions/:id — delete a session (requires auth)
+router.delete('/api/v1/agent/sessions/:id', rateLimiter, authForward, agentProxy);
+
 // GET /api/v1/agent/health — no auth (ops probe)
 router.get('/api/v1/agent/health', agentProxy);
 

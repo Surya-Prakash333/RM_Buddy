@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { Phone, PhoneOff, Mic } from 'lucide-react';
 import { useAuthStore } from '@/store/auth.store';
+import { useChatStore } from '@/store/chat.store';
 import { useChat } from '@/hooks/useChat';
 import { useVoice } from '@/hooks/useVoice';
 import { ChatMessage } from './ChatMessage';
@@ -175,8 +176,18 @@ export function RMCompanionPanel(): ReactElement {
     ? rmIdentity.rm_name.split(' ').slice(0, 2).map((n) => n[0]).join('').toUpperCase()
     : 'RM';
 
-  const { messages, sendMessage, isLoading } = useChat();
+  const { messages, sendMessage, loadSession, isLoading } = useChat();
   const { status: voiceStatus, isSpeaking, startConversation, stopConversation } = useVoice();
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+
+  // Load session messages when a past conversation is selected from the sidebar
+  const prevSessionRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (activeSessionId && activeSessionId !== prevSessionRef.current) {
+      void loadSession(activeSessionId);
+    }
+    prevSessionRef.current = activeSessionId;
+  }, [activeSessionId, loadSession]);
 
   const [inputValue, setInputValue] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);

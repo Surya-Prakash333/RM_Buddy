@@ -196,6 +196,27 @@ class OrchestratorGraph:
         rm_role = state.get("rm_role", AgentRole.RM.value)
 
         try:
+            # Greetings — fast, no LLM call needed
+            if intent == IntentType.GREETING.value:
+                system_prompt = (
+                    VIKRAM_SYSTEM_PROMPT if rm_role == AgentRole.BM.value else ARIA_SYSTEM_PROMPT
+                )
+                completion = await self.llm.chat.completions.create(
+                    model="gemini-cost",
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": state["message"]},
+                    ],
+                    max_tokens=150,
+                    temperature=0.7,
+                    timeout=15.0,
+                )
+                return {
+                    "response": completion.choices[0].message.content,
+                    "widgets": [],
+                    "tool_results": [],
+                }
+
             # Route to specialist agents
             if intent in (IntentType.CLIENT_QUERY.value, IntentType.PORTFOLIO_ANALYSIS.value):
                 from agents.specialists.qa_agent import QAAgent

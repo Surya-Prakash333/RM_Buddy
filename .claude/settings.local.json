@@ -60,7 +60,9 @@
       "Bash(curl -s -X POST http://localhost:4000/v1/chat/completions \\\\\n  -H \"Authorization: Bearer sk-i6oSgZ_D_P11eRTT1vIqsw\" \\\\\n  -H \"Content-Type: application/json\" \\\\\n  -d '{\"model\":\"claude-default\",\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}],\"max_tokens\":10}' 2>&1 | python3 -m json.tool | head -10)",
       "Bash(curl -s -X POST http://localhost:5000/agent/chat \\\\\n  -H 'Content-Type: application/json' \\\\\n  -H 'X-RM-Identity: {\"rm_id\":\"RM001\",\"role\":\"RM\"}' \\\\\n  -d '{\"rm_id\":\"RM001\",\"session_id\":\"hi-test-1\",\"message\":\"Hi\",\"message_type\":\"text\"}' | python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('Response:', d.get\\('text',''\\)[:200]\\); print\\('Latency:', d.get\\('metadata',{}\\).get\\('latency_ms','?'\\), 'ms'\\)\")",
       "Bash(cd \"/Users/surya/Desktop/Vibe/AI RM Assistant/rm-buddy/apps/litellm-proxy\" && pm2 delete rm-litellm-proxy 2>&1 && pm2 start ecosystem.config.js 2>&1 | tail -3)",
-      "Bash(sleep 5 && curl -s -X POST http://localhost:4000/v1/chat/completions \\\\\n  -H \"Authorization: Bearer sk-i6oSgZ_D_P11eRTT1vIqsw\" \\\\\n  -H \"Content-Type: application/json\" \\\\\n  -d '{\"model\":\"gemini-cost\",\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}],\"max_tokens\":10}' | python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('OK:', d['choices'][0]['message']['content']\\)\")"
+      "Bash(sleep 5 && curl -s -X POST http://localhost:4000/v1/chat/completions \\\\\n  -H \"Authorization: Bearer sk-i6oSgZ_D_P11eRTT1vIqsw\" \\\\\n  -H \"Content-Type: application/json\" \\\\\n  -d '{\"model\":\"gemini-cost\",\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}],\"max_tokens\":10}' | python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('OK:', d['choices'][0]['message']['content']\\)\")",
+      "Bash(sleep 3 && curl -s http://localhost:5000/health 2>&1)",
+      "Bash(sleep 3 && curl -s http://localhost:5000/health)"
     ]
   }
 }

@@ -1,12 +1,12 @@
 // ============================================================
 // useChat.ts — Text-based chat with the RM Buddy agent API
-// INFRA-11LABS-02
 // ============================================================
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import axios from 'axios';
 import { useAuthStore } from '@/store/auth.store';
 import { useWidgetStore } from '@/store/widget.store';
+import { useChatStore } from '@/store/chat.store';
 import type { WidgetPayload } from '@/types';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ interface AgentChatResponse {
 export interface UseChatReturn {
   messages: ChatMessage[];
   sendMessage: (text: string) => Promise<void>;
+  loadSession: (sessionId: string) => Promise<void>;
   isLoading: boolean;
   error: string | null;
 }
@@ -62,6 +63,56 @@ export function useChat(): UseChatReturn {
 
   const rmIdentity = useAuthStore((s) => s.rmIdentity);
   const setWidgets = useWidgetStore((s) => s.setWidgets);
+  const activeSessionId = useChatStore((s) => s.activeSessionId);
+
+  // Clear messages when switching to a new conversation
+  useEffect(() => {
+    if (activeSessionId === null) {
+      setMessages([]);
+      setWidgets([]);
+    }
+  }, [activeSessionId, setWidgets]);
+
+  // Load a past session's messages
+  const loadSession = useCallback(
+    async (sessionId: string): Promise<void> => {
+      const token = getAuthToken();
+      const apiUrl = import.meta.env.VITE_API_URL ?? '';
+
+      try {
+        setIsLoading(true);
+        const response = await axios.get(
+          `${apiUrl}/api/v1/agent/sessions/${sessionId}`,
+          {
+            headers: {
+              'Content-Type': 'application/json',
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          },
+        );
+
+        const data = response.data;
+        const rawMessages = data.messages || [];
+
+        const loaded: ChatMessage[] = rawMessages.map(
+          (msg: { role: string; content: string }, i: number) => ({
+            id: `hist-${i}-${generateId()}`,
+            role: msg.role as 'user' | 'assistant',
+            content: msg.content || '',
+            timestamp: new Date(),
+          }),
+        );
+
+        setMessages(loaded);
+        useChatStore.getState().setActiveSession(sessionId);
+      } catch {
+        setError('Failed to load conversation history.');
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
 
   const sendMessage = useCallback(
     async (text: string): Promise<void> => {
@@ -80,7 +131,8 @@ export function useChat(): UseChatReturn {
       setError(null);
 
       const token = getAuthToken();
-      const sessionId = rmIdentity?.session_id ?? '';
+      // Use active session or the identity's session
+      const sessionId = activeSessionId ?? rmIdentity?.session_id ?? '';
       const apiUrl = import.meta.env.VITE_API_URL ?? '';
 
       try {
@@ -97,7 +149,6 @@ export function useChat(): UseChatReturn {
         );
 
         const raw = response.data;
-        // Support both direct shape { text, widgets } and wrapped { data: { response, widgets } }
         const agentText = (raw as unknown as { data?: { response?: string } }).data?.response ?? raw.text ?? '';
         const widgets = raw.widgets;
 
@@ -126,7 +177,6 @@ export function useChat(): UseChatReturn {
 
         setError(message);
 
-        // Surface the error as an assistant message so it appears in chat
         const errorMsg: ChatMessage = {
           id: generateId(),
           role: 'assistant',
@@ -138,8 +188,8 @@ export function useChat(): UseChatReturn {
         setIsLoading(false);
       }
     },
-    [rmIdentity],
+    [rmIdentity, activeSessionId, setWidgets],
   );
 
-  return { messages, sendMessage, isLoading, error };
+  return { messages, sendMessage, loadSession, isLoading, error };
 }

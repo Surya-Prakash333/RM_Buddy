@@ -41,6 +41,16 @@ class IntentClassifier:
 
     # Keyword rules ordered from most-specific to least-specific.
     # A message is matched to the FIRST intent whose keywords appear in it.
+    # Short greeting messages — handled before other intents so "hi", "hello"
+    # don't fall through to the LLM classifier and get misinterpreted.
+    GREETING_WORDS: set[str] = {
+        "hi", "hello", "hey", "hii", "hiii", "hola", "howdy",
+        "good morning", "good afternoon", "good evening",
+        "gm", "morning", "namaste", "sup", "yo",
+        "thanks", "thank you", "ok", "okay", "cool", "great",
+        "bye", "goodbye", "see you", "talk later",
+    }
+
     KEYWORD_RULES: dict[IntentType, list[str]] = {
         IntentType.VIEW_ALERTS: [
             "alert", "notification", "urgent", "pending", "warning",
@@ -88,9 +98,18 @@ class IntentClassifier:
             Tuple of (IntentType, confidence) where confidence is 0.0–1.0.
         """
         # ------------------------------------------------------------------
+        # Stage 0: greeting detection — short casual messages
+        # ------------------------------------------------------------------
+        message_lower = message.strip().lower()
+        # Strip punctuation for matching ("Hi!" → "hi", "Hello?" → "hello")
+        cleaned = message_lower.rstrip("!?.,'\"")
+        if cleaned in self.GREETING_WORDS or len(cleaned) <= 3 and cleaned.isalpha():
+            logger.debug("Intent classified as greeting [message=%s]", message)
+            return IntentType.GREETING, 0.95
+
+        # ------------------------------------------------------------------
         # Stage 1: keyword matching
         # ------------------------------------------------------------------
-        message_lower = message.lower()
         for intent, keywords in self.KEYWORD_RULES.items():
             if any(kw in message_lower for kw in keywords):
                 logger.debug(

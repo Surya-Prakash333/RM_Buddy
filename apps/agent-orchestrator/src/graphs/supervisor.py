@@ -40,6 +40,15 @@ KEYWORD_MAP: dict[str, list[str]] = {
 }
 
 
+GREETING_WORDS: set[str] = {
+    "hi", "hello", "hey", "hii", "hiii", "hola", "howdy",
+    "good morning", "good afternoon", "good evening",
+    "gm", "morning", "namaste", "sup", "yo",
+    "thanks", "thank you", "ok", "okay", "cool", "great",
+    "bye", "goodbye", "see you", "talk later",
+}
+
+
 class SupervisorGraph:
     """Parallel-dispatch supervisor graph for the RM Buddy agent orchestrator."""
 
@@ -106,8 +115,18 @@ class SupervisorGraph:
         return {"loaded_context": loaded}
 
     async def _classify_intent(self, state: AgentState) -> dict:
+        # Stage 0: greeting detection — skip specialist dispatch entirely
+        message_lower = state["message"].strip().lower()
+        cleaned = message_lower.rstrip("!?.,'\"")
+        if cleaned in GREETING_WORDS or (len(cleaned) <= 3 and cleaned.isalpha()):
+            logger.info("Greeting detected, skipping specialists [message=%s]", state["message"])
+            return {
+                "intent": "greeting",
+                "intent_confidence": 0.95,
+                "active_specialists": [],  # empty = no specialist dispatch
+            }
+
         # Stage 1: keyword scan for specialist selection
-        message_lower = state["message"].lower()
         active: list[str] = []
         for specialist, keywords in KEYWORD_MAP.items():
             if any(kw in message_lower for kw in keywords):
@@ -180,6 +199,27 @@ class SupervisorGraph:
         return {"specialist_results": specialist_results, "widgets": all_widgets}
 
     async def _compose_response(self, state: AgentState) -> dict:
+        # Greetings — fast direct LLM response, no specialist data needed
+        if state.get("intent") == "greeting":
+            rm_role = state.get("rm_role", "RM")
+            persona = VIKRAM_SYSTEM_PROMPT if rm_role == "BM" else ARIA_SYSTEM_PROMPT
+            try:
+                llm = ChatOpenAI(
+                    base_url=f"{settings.litellm_url}/v1",
+                    api_key=settings.litellm_master_key,
+                    model=settings.llm_fast_model,
+                    temperature=0.7,
+                    max_tokens=100,
+                )
+                response = await llm.ainvoke([
+                    {"role": "system", "content": persona},
+                    {"role": "user", "content": state["message"]},
+                ])
+                return {"response": response.content if hasattr(response, "content") else str(response)}
+            except Exception as exc:
+                logger.warning("Greeting compose failed: %s", exc)
+                return {"response": "Hi! I'm Aria, your wealth management assistant. How can I help you today?"}
+
         specialist_results = state.get("specialist_results", {})
         loaded_context = state.get("loaded_context", {})
 
