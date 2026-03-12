@@ -62,7 +62,13 @@
       "Bash(cd \"/Users/surya/Desktop/Vibe/AI RM Assistant/rm-buddy/apps/litellm-proxy\" && pm2 delete rm-litellm-proxy 2>&1 && pm2 start ecosystem.config.js 2>&1 | tail -3)",
       "Bash(sleep 5 && curl -s -X POST http://localhost:4000/v1/chat/completions \\\\\n  -H \"Authorization: Bearer sk-i6oSgZ_D_P11eRTT1vIqsw\" \\\\\n  -H \"Content-Type: application/json\" \\\\\n  -d '{\"model\":\"gemini-cost\",\"messages\":[{\"role\":\"user\",\"content\":\"say hi\"}],\"max_tokens\":10}' | python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('OK:', d['choices'][0]['message']['content']\\)\")",
       "Bash(sleep 3 && curl -s http://localhost:5000/health 2>&1)",
-      "Bash(sleep 3 && curl -s http://localhost:5000/health)"
+      "Bash(sleep 3 && curl -s http://localhost:5000/health)",
+      "Bash(sleep 5 && curl -s -H \"Authorization: Bearer sk-i6oSgZ_D_P11eRTT1vIqsw\" http://localhost:4000/v1/models 2>&1 | head -30)",
+      "Bash(sleep 5 && curl -s -X POST http://localhost:4000/v1/chat/completions \\\\\n  -H \"Authorization: Bearer sk-i6oSgZ_D_P11eRTT1vIqsw\" \\\\\n  -H \"Content-Type: application/json\" \\\\\n  -d '{\"model\":\"claude-default\",\"messages\":[{\"role\":\"user\",\"content\":\"Say hello in one sentence\"}],\"max_tokens\":50}' 2>&1 | python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('choices',[{}]\\)[0].get\\('message',{}\\).get\\('content','ERROR: '+json.dumps\\(d.get\\('error',''\\)\\)\\)\\)\")",
+      "Bash(cd \"/Users/surya/Desktop/Vibe/AI RM Assistant/rm-buddy\" && pm2 delete rm-litellm-proxy 2>&1 | tail -1 && cd apps/litellm-proxy && pm2 start ecosystem.config.js 2>&1 | tail -3)",
+      "Bash(mongosh --quiet --eval 'db.getSiblingDB\\(\"rmbuddy\"\\).chat_history.countDocuments\\(\\)' 2>&1)",
+      "Bash(mongosh --quiet --eval 'db.getSiblingDB\\(\"RM_Buddy\"\\).rm_facts.find\\(\\).sort\\({updated_at:-1}\\).limit\\(5\\).toArray\\(\\)' 2>&1 | head -50)",
+      "Bash(mongosh --quiet --eval 'db.getSiblingDB\\(\"RM_Buddy\"\\).rm_facts.find\\(\\).sort\\({updated_at:-1}\\).toArray\\(\\)' 2>&1)"
     ]
   }
 }

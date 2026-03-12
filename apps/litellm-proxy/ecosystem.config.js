@@ -13,6 +13,7 @@ module.exports = {
     env: {
       ...parsedEnv,
       LITELLM_MASTER_KEY: parsedEnv.LITELLM_MASTER_KEY,
+      GEMINI_API_KEY: parsedEnv.GEMINI_API_KEY,
       GROQ_API_KEY: parsedEnv.GROQ_API_KEY,
       OPENAI_API_KEY: parsedEnv.OPENAI_API_KEY || parsedEnv.GROQ_API_KEY,
       NODE_ENV: 'production',

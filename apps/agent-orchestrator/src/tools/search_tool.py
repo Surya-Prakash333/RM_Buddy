@@ -35,19 +35,18 @@ logger = logging.getLogger(__name__)
 
 
 @tool
-async def search_clients_by_name(query: str, rm_id: str) -> dict[str, Any]:
+async def search_clients_by_name(query: str) -> dict[str, Any]:
     """Search for clients by name using text search.
 
     Calls the Core API clients endpoint with a search query and returns at
-    most the top 5 matching clients for the specified RM.
+    most the top 5 matching clients for the current RM (auto-detected from context).
 
     Args:
         query: Client name or partial name to search for.
-        rm_id: RM ID to scope the search to the correct book of business.
 
     Returns:
         Dict with 'results' list of matching clients (up to 5), each
-        containing at minimum: client_id, name, tier, aum_cr.
+        containing: client_id, client_name, tier, aum, city, age, last_interaction.
         Returns {"results": [], "error": str} on failure.
     """
     url = f"{settings.core_api_url}/api/v1/clients"
@@ -82,9 +81,8 @@ async def search_clients_by_name(query: str, rm_id: str) -> dict[str, Any]:
         results = clients[:5]  # defensive cap even if API returns more
 
         logger.debug(
-            "search_clients_by_name success [query=%s, rm_id=%s, count=%s]",
+            "search_clients_by_name success [query=%s, count=%s]",
             query,
-            rm_id,
             len(results),
         )
         return {"results": results, "total": len(results)}

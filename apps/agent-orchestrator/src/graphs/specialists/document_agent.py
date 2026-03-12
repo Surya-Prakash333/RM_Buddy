@@ -16,7 +16,7 @@ def _make_agent():
     llm = ChatOpenAI(
         base_url=f"{settings.litellm_url}/v1",
         api_key=settings.litellm_master_key,
-        model=settings.llm_fast_model,
+        model=settings.llm_smart_model,
     )
     return create_react_agent(
         llm,

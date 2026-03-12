@@ -44,13 +44,9 @@ class Settings(BaseSettings):
     redis_password: str = ""
 
     # -----------------------------------------------------------------------
-    # MongoDB — persistent session history
+    # MongoDB — remote replica set for all data
     # -----------------------------------------------------------------------
-    mongodb_uri: str = "mongodb://localhost:27017/rmbuddy"
-
-    # -----------------------------------------------------------------------
-    # MongoDB — memory collections (direct Motor connection)
-    # -----------------------------------------------------------------------
+    mongodb_uri: str = "mongodb://m1b.dev.pr.com:27017/RM_Buddy?directConnection=true"
     memory_mongodb_uri: str = "mongodb://m1b.dev.pr.com:27017/RM_Buddy?directConnection=true"
     memory_db_name: str = "RM_Buddy"
 

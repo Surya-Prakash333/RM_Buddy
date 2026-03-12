@@ -12,6 +12,11 @@ export class FilterDto {
   @IsString()
   asset_class?: string;
 
+  @ApiPropertyOptional({ description: 'City filter (e.g. Mumbai, Bangalore, Delhi)' })
+  @IsOptional()
+  @IsString()
+  city?: string;
+
   @ApiPropertyOptional({ description: 'Full-text search term' })
   @IsOptional()
   @IsString()

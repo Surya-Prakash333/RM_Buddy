@@ -181,10 +181,14 @@ export function RMCompanionPanel(): ReactElement {
   const activeSessionId = useChatStore((s) => s.activeSessionId);
 
   // Load session messages when a past conversation is selected from the sidebar
+  // Skip loading for sessions just created by sendMessage (starts with "sess-")
   const prevSessionRef = useRef<string | null>(null);
   useEffect(() => {
     if (activeSessionId && activeSessionId !== prevSessionRef.current) {
-      void loadSession(activeSessionId);
+      // Sessions created by sendMessage start with "sess-" — don't reload those
+      if (!activeSessionId.startsWith('sess-')) {
+        void loadSession(activeSessionId);
+      }
     }
     prevSessionRef.current = activeSessionId;
   }, [activeSessionId, loadSession]);

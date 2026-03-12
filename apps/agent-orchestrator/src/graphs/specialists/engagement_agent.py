@@ -9,18 +9,19 @@ from langgraph.prebuilt import create_react_agent
 from config.settings import settings
 from graphs.state import AgentState
 from prompts.specialist_prompts import ENGAGEMENT_AGENT_PROMPT
-from tools.crm_tool import get_client_list, get_client_profile
+from tools.crm_tool import get_client_list, get_client_profile, get_meetings, get_leads
+from tools.search_tool import search_clients_by_name
 
 
 def _make_agent():
     llm = ChatOpenAI(
         base_url=f"{settings.litellm_url}/v1",
         api_key=settings.litellm_master_key,
-        model=settings.llm_fast_model,
+        model=settings.llm_smart_model,
     )
     return create_react_agent(
         llm,
-        tools=[get_client_list, get_client_profile],
+        tools=[get_client_list, get_client_profile, get_meetings, get_leads, search_clients_by_name],
         prompt=ENGAGEMENT_AGENT_PROMPT,
     )
 

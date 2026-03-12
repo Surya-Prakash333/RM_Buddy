@@ -131,8 +131,9 @@ export function useChat(): UseChatReturn {
       setError(null);
 
       const token = getAuthToken();
-      // Use active session or the identity's session
-      const sessionId = activeSessionId ?? rmIdentity?.session_id ?? '';
+      // Use active session, or generate a fresh one for new conversations
+      const isNewConversation = activeSessionId === null;
+      const sessionId = activeSessionId ?? `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
       const apiUrl = import.meta.env.VITE_API_URL ?? '';
 
       try {
@@ -151,6 +152,12 @@ export function useChat(): UseChatReturn {
         const raw = response.data;
         const agentText = (raw as unknown as { data?: { response?: string } }).data?.response ?? raw.text ?? '';
         const widgets = raw.widgets;
+
+        // If this was a new conversation, set the returned session as active
+        const returnedSessionId = raw.session_id || sessionId;
+        if (isNewConversation && returnedSessionId) {
+          useChatStore.getState().setActiveSession(returnedSessionId);
+        }
 
         // Push widgets to the global store for the right-side panel
         if (widgets?.length) {

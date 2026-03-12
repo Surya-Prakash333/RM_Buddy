@@ -1,5 +1,5 @@
 model_list:
-  # Primary model - Llama 3.3 70B for all agent reasoning tasks
+  # Primary model - Llama 3.3 70B for compose/complex reasoning
   - model_name: claude-default
     litellm_params:
       model: groq/llama-3.3-70b-versatile
@@ -15,7 +15,7 @@ model_list:
       max_tokens: 4096
       temperature: 0.3
 
-  # Cost-optimized - smaller model for summaries/less critical tasks
+  # Cost-optimized - 8b for classify/format
   - model_name: gemini-cost
     litellm_params:
       model: groq/llama-3.1-8b-instant

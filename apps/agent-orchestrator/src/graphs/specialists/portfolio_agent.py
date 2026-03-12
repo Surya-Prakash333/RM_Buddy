@@ -13,7 +13,7 @@ from langgraph.prebuilt import create_react_agent
 from config.settings import settings
 from graphs.state import AgentState
 from prompts.specialist_prompts import PORTFOLIO_AGENT_PROMPT
-from tools.crm_tool import get_client_list, get_client_profile, get_client_portfolio
+from tools.crm_tool import get_client_list, get_client_profile, get_client_portfolio, get_dashboard_summary, get_meetings, get_leads
 from tools.search_tool import search_clients_by_name
 
 logger = logging.getLogger(__name__)
@@ -29,6 +29,7 @@ def _make_agent():
         llm,
         tools=[
             get_client_list, get_client_profile, get_client_portfolio,
+            get_dashboard_summary, get_meetings, get_leads,
             search_clients_by_name,
         ],
         prompt=PORTFOLIO_AGENT_PROMPT,

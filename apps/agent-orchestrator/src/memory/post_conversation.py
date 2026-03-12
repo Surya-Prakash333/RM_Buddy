@@ -20,28 +20,37 @@ from config.settings import settings
 
 logger = logging.getLogger("memory.post_conversation")
 
-EXTRACTION_PROMPT = """Analyze this conversation between an RM and AI assistant. Extract:
+EXTRACTION_PROMPT = """Analyze this conversation between an RM (Relationship Manager) and their AI assistant. Extract ONLY genuinely valuable long-term memories.
 
-1. **Summary**: 2-3 sentence summary of what was discussed.
-2. **Topics**: List of topics (e.g., ["portfolio", "alerts", "rebalancing"])
-3. **Clients discussed**: List of client IDs or names mentioned.
-4. **Facts**: Non-trivial facts to remember. Each fact has:
-   - category: one of "preference", "client_note", "decision", "pattern", "relationship"
-   - content: the fact in one sentence
-   - confidence: 0.5 to 1.0 (how certain this fact is)
-   - client_id: if the fact is about a specific client (optional, null otherwise)
+## What to extract:
+1. **Summary**: 1-2 sentence summary of the conversation topic.
+2. **Topics**: List of topics (e.g., ["portfolio review", "diamond clients"])
+3. **Clients discussed**: Client names or IDs explicitly discussed.
+4. **Facts**: ONLY facts worth remembering in future conversations. Max 2-3 facts per conversation.
 
-Only extract facts that are genuinely useful for future conversations.
-Do NOT extract trivial observations.
+## Fact categories:
+- **preference**: RM's stated preference for how they work (e.g., "RM prefers daily briefing before 9 AM")
+- **client_note**: Important insight about a specific client (e.g., "Client is risk-averse after 2020 market crash")
+- **decision**: An action the RM decided to take (e.g., "RM decided to rebalance Rajesh Shah's portfolio")
+- **relationship**: Connection between people (e.g., "Amit Sharma was referred by Rajesh Shah")
+
+## STRICT RULES — Do NOT extract:
+- The user's query itself ("RM asked about clients" — this is NOT a fact)
+- Data that came from the database (AUM values, client counts, tier info — this is already stored)
+- Internal tool behavior ("assistant used search_clients_by_name" — irrelevant)
+- Errors or not-found results ("client not found" — transient, not a memory)
+- Greetings or small talk ("RM said hi" — trivial)
+- Generic observations ("RM wants to know about clients" — obviously, they're an RM)
+- Anything with confidence below 0.7
+
+If the conversation is just a simple data lookup with no meaningful insight, return an EMPTY facts array.
 
 Return JSON:
 {{
   "summary": "...",
   "topics": [...],
   "clients_discussed": [...],
-  "facts": [
-    {{"category": "...", "content": "...", "confidence": 0.8, "client_id": null}}
-  ]
+  "facts": []
 }}
 
 Conversation:
